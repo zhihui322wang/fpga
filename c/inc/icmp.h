@@ -1,3 +1,5 @@
+// icmp.h — ICMP Echo Reply 处理
+
 #ifndef _ICMP_H_
 #define _ICMP_H_
 #include "lcpu_general.h"

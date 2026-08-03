@@ -14,14 +14,18 @@ SECTIONS
         KEEP(*(.text.bootloader.*))
     } > ROM
 
-    .text : { *(.text*) } > ROM
+    .text   : { *(.text*)   } > ROM
     .rodata : { *(.rodata*) } > ROM
-    .data : { *(.data*) } > ROM
+    .data   : { *(.data*)   } > ROM
+
     .bss (NOLOAD) : {
+        __bss_start = .;
         *(.bss*)
         *(COMMON)
+        __bss_end = .;
     } > ROM
 
     . = ALIGN(4);
     _end = .;
+    _stack_top = ORIGIN(ROM) + LENGTH(ROM);
 }

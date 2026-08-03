@@ -97,3 +97,5 @@ hwcos/
 *.qst
 *.qsf_bak
 *.tcl~
+# Build outputs
+c_build/out/
