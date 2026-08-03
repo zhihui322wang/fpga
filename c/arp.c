@@ -31,11 +31,7 @@ int arp_process(uint8_t *frame, uint16_t len) {
                       |  frame[OFF_ETH_TYPE + 1];
     if (eth_type != ETH_TYPE_ARP) return 0;
 
-    // 校验: Ethernet + IPv4 + 6/4 地SSH
-my key
-SHA256:lwFBh+zAIwzsCEqw9CjqLXmOmEPKTTuOPaMdKBfLQC0
-Added on Jul 15, 2026
-Last used within the last 2 weeks — Read/write址长度
+    // 校验: Ethernet + IPv4 + 6/4 地址长度
     if (frame[OFF_ARP_HTYPE]   != 0x00 || frame[OFF_ARP_HTYPE+1] != 0x01) return 0;
     if (frame[OFF_ARP_PTYPE]   != 0x08 || frame[OFF_ARP_PTYPE+1] != 0x00) return 0;
     if (frame[OFF_ARP_HLEN]    != 6    || frame[OFF_ARP_PLEN]    != 4)    return 0;
@@ -44,11 +40,7 @@ Last used within the last 2 weeks — Read/write址长度
     uint16_t opcode = (frame[OFF_ARP_OPCODE] << 8)
                     |  frame[OFF_ARP_OPCODE + 1];
     if (opcode != ARP_REQUEST) return 0;
-SSH
-my key
-SHA256:lwFBh+zAIwzsCEqw9CjqLXmOmEPKTTuOPaMdKBfLQC0
-Added on Jul 15, 2026
-Last used within the last 2 weeks — Read/write
+
     // 检查 Target IP 是不是本机
     uint32_t target_ip =
         ((uint32_t)frame[OFF_ARP_TARGET_IP]   << 24) |
