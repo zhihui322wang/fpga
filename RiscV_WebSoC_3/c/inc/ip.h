@@ -3,10 +3,8 @@
 #ifndef _IP_H_
 #define _IP_H_
 
-#include <stdint.h>
+uint16 ip_proc();
+uint16 ip_header_checksum(uint16 total_len, uint16 checksum_ini);
+void ip_header_update(uint32 src_ip, uint16 total_len);
 
-uint16_t ip_calc_checksum(const uint8_t *data, uint16_t byte_len);
-void     ip_swap_src_dst(uint8_t *frame);
-int      ip_process(uint8_t *frame, uint16_t len);
-
-#endif
+#endif // _IP_H_

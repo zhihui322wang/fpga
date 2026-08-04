@@ -1,91 +1,106 @@
-// arp.c — ARP 协议: 收到 Request → 原地改包 → 发 Reply
+#include "inc/lcpu_general.h"
+#include "inc/arp.h"
 
-#include "lcpu_general.h"
-#include "arp.h"
-#include "eth.h"
-#include <string.h>
+void arp_reply() {
+    uint16 i;
+    uint16 arp_type = 0;
+    uint32 dst_mac_high = 0;
+    uint16 dst_mac_low = 0;
+    uint32 target_ip = 0;
 
-static arp_cache_t arp_cache;
-
-void arp_init(void) {
-    arp_cache.valid = false;
-    arp_cache.ip = 0;
-    memset(arp_cache.mac, 0, 6);
-}
-
-// 查缓存, 命中返回 1 并拷贝 MAC
-int arp_get_mac(uint32_t ip, uint8_t *mac) {
-    if (arp_cache.valid && arp_cache.ip == ip) {
-        memcpy(mac, arp_cache.mac, 6);
-        return 1;
+    // Read destination MAC (bytes 0-5) in batches: high 4 bytes + low 2 bytes
+    for (i = 0; i < 4; i++) {
+        LCPU_RD_SET_ADDR(i);
+        dst_mac_high = (dst_mac_high << 8) | (LCPU_RD_DATA8() & 0xFFu);
     }
-    return 0;
-}
+    for (i = 4; i < 6; i++) {
+        LCPU_RD_SET_ADDR(i);
+        dst_mac_low = (uint16)((dst_mac_low << 8) | (LCPU_RD_DATA8() & 0xFFu));
+    }
 
-// 处理 ARP 帧, 请求 → 原地改包发送 Reply
-int arp_process(uint8_t *frame, uint16_t len) {
-    if (len < 42) return 0;
+    // Accept only ARP packets sent to local MAC or broadcast MAC
+    if (!((dst_mac_high == Local_MAC_HIGH && dst_mac_low == Local_MAC_LOW) ||
+          (dst_mac_high == 0xFFFFFFFFu && dst_mac_low == 0xFFFFu))) {
+        return;
+    }
 
-    // 只处理 ARP
-    uint16_t eth_type = (frame[OFF_ETH_TYPE] << 8)
-                      |  frame[OFF_ETH_TYPE + 1];
-    if (eth_type != ETH_TYPE_ARP) return 0;
+    // Read ARP target IP (bytes 38-41) and verify it matches local IP
+    target_ip = 0;
+    for (i = OFF_ARP_TARGET_IP; i < OFF_ARP_TARGET_IP + 4; i++) {
+        LCPU_RD_SET_ADDR(i);
+        target_ip = (target_ip << 8) | (LCPU_RD_DATA8() & 0xFFu);
+    }
+    if (target_ip != Local_IP_ADDR) return;
 
-    // 校验: Ethernet + IPv4 + 6/4 地址长度
-    if (frame[OFF_ARP_HTYPE]   != 0x00 || frame[OFF_ARP_HTYPE+1] != 0x01) return 0;
-    if (frame[OFF_ARP_PTYPE]   != 0x08 || frame[OFF_ARP_PTYPE+1] != 0x00) return 0;
-    if (frame[OFF_ARP_HLEN]    != 6    || frame[OFF_ARP_PLEN]    != 4)    return 0;
+    // Read ARP opcode (bytes 20-21)
+    LCPU_RD_SET_ADDR(OFF_ARP_OPCODE);
+    arp_type = (uint16)LCPU_RD_DATA8() << 8;
+    LCPU_RD_SET_ADDR(OFF_ARP_OPCODE + 1);
+    arp_type |= LCPU_RD_DATA8();
 
-    // 只回 Request
-    uint16_t opcode = (frame[OFF_ARP_OPCODE] << 8)
-                    |  frame[OFF_ARP_OPCODE + 1];
-    if (opcode != ARP_REQUEST) return 0;
+    if (arp_type != ARP_REQUEST) return;
 
-    // 检查 Target IP 是不是本机
-    uint32_t target_ip =
-        ((uint32_t)frame[OFF_ARP_TARGET_IP]   << 24) |
-        ((uint32_t)frame[OFF_ARP_TARGET_IP+1] << 16) |
-        ((uint32_t)frame[OFF_ARP_TARGET_IP+2] <<  8) |
-        (uint32_t)frame[OFF_ARP_TARGET_IP+3];
-    if (target_ip != LOCAL_IP_ADDR) return 0;
+    // --- Build ARP reply frame in sections ---
 
-    // 更新缓存
-    uint32_t sender_ip =
-        ((uint32_t)frame[OFF_ARP_SENDER_IP]   << 24) |
-        ((uint32_t)frame[OFF_ARP_SENDER_IP+1] << 16) |
-        ((uint32_t)frame[OFF_ARP_SENDER_IP+2] <<  8) |
-        (uint32_t)frame[OFF_ARP_SENDER_IP+3];
-    arp_cache.valid = true;
-    arp_cache.ip = sender_ip;
-    memcpy(arp_cache.mac, &frame[OFF_ARP_SENDER_MAC], 6);
+    // Section 1: Copy RX → TX for bytes 0-5 (dst MAC ← src MAC from RX[6..11])
+    for (i = 0; i < 6; i++) {
+        LCPU_RD_SET_ADDR(OFF_ETH_SRC_MAC + i);
+        LCPU_WR_BYTE(i, LCPU_RD_DATA8());
+    }
 
-    // 原地改包: 交换 MAC, 改 Opcode, 填本机信息
-    memcpy(&frame[OFF_ETH_DST_MAC], &frame[OFF_ETH_SRC_MAC], 6);
-    uint8_t my_mac[6];
-    eth_get_mac(my_mac);
-    memcpy(&frame[OFF_ETH_SRC_MAC], my_mac, 6);
+    // Section 2: Write local MAC as source MAC (bytes 6-11)
+    for (i = 0; i < 4; i++) {
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + i, (Local_MAC_HIGH >> (24 - i * 8)) & 0xFF);
+    }
+    for (i = 0; i < 2; i++) {
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 4 + i, (Local_MAC_LOW >> (8 - i * 8)) & 0xFF);
+    }
 
-    // Opcode ← Reply
-    frame[OFF_ARP_OPCODE]     = 0x00;
-    frame[OFF_ARP_OPCODE + 1] = ARP_REPLY & 0xFF;
+    // Section 3: Copy Ethernet type (bytes 12-13) unchanged
+    for (i = OFF_ETH_TYPE; i < OFF_ETH_TYPE + 2; i++) {
+        LCPU_RD_SET_ADDR(i);
+        LCPU_WR_BYTE(i, LCPU_RD_DATA8());
+    }
 
-    // Target = 请求方, Sender = 本机
-    memcpy(&frame[OFF_ARP_TARGET_MAC], &frame[OFF_ARP_SENDER_MAC], 6);
-    frame[OFF_ARP_TARGET_IP]   = (sender_ip >> 24) & 0xFF;
-    frame[OFF_ARP_TARGET_IP+1] = (sender_ip >> 16) & 0xFF;
-    frame[OFF_ARP_TARGET_IP+2] = (sender_ip >>  8) & 0xFF;
-    frame[OFF_ARP_TARGET_IP+3] =  sender_ip        & 0xFF;
+    // Section 4: Copy hardware type, protocol type, hlen, plen (bytes 14-19) unchanged
+    for (i = OFF_ARP_HTYPE; i < OFF_ARP_OPCODE; i++) {
+        LCPU_RD_SET_ADDR(i);
+        LCPU_WR_BYTE(i, LCPU_RD_DATA8());
+    }
 
-    memcpy(&frame[OFF_ARP_SENDER_MAC], my_mac, 6);
-    frame[OFF_ARP_SENDER_IP]   = (LOCAL_IP_ADDR >> 24) & 0xFF;
-    frame[OFF_ARP_SENDER_IP+1] = (LOCAL_IP_ADDR >> 16) & 0xFF;
-    frame[OFF_ARP_SENDER_IP+2] = (LOCAL_IP_ADDR >>  8) & 0xFF;
-    frame[OFF_ARP_SENDER_IP+3] =  LOCAL_IP_ADDR        & 0xFF;
+    // Section 5: Write ARP opcode = REPLY (bytes 20-21)
+    LCPU_WR_BYTE(OFF_ARP_OPCODE,     (ARP_ECHO_REPLY >> 8) & 0xFF);
+    LCPU_WR_BYTE(OFF_ARP_OPCODE + 1, (ARP_ECHO_REPLY >> 0) & 0xFF);
 
-    // 填充到 60 字节 (最小以太网帧)
-    for (uint16_t i = 42; i < 60; i++)
-        frame[i] = 0x00;
+    // Section 6: Write local MAC as sender MAC (bytes 22-27)
+    for (i = 0; i < 4; i++) {
+        LCPU_WR_BYTE(OFF_ARP_SENDER_MAC + i, (Local_MAC_HIGH >> (24 - i * 8)) & 0xFF);
+    }
+    for (i = 0; i < 2; i++) {
+        LCPU_WR_BYTE(OFF_ARP_SENDER_MAC + 4 + i, (Local_MAC_LOW >> (8 - i * 8)) & 0xFF);
+    }
 
-    eth_tx_frame(frame, 60);
-    return 1;
+    // Section 7: Write local IP as sender IP (bytes 28-31)
+    for (i = 0; i < 4; i++) {
+        LCPU_WR_BYTE(OFF_ARP_SENDER_IP + i, (Local_IP_ADDR >> (24 - i * 8)) & 0xFF);
+    }
+
+    // Section 8: Copy sender MAC from RX to target MAC in TX (bytes 32-37 ← RX[22..27])
+    for (i = 0; i < 6; i++) {
+        LCPU_RD_SET_ADDR(OFF_ARP_SENDER_MAC + i);
+        LCPU_WR_BYTE(OFF_ARP_TARGET_MAC + i, LCPU_RD_DATA8());
+    }
+
+    // Section 9: Copy sender IP from RX to target IP in TX (bytes 38-41 ← RX[28..31])
+    for (i = 0; i < 4; i++) {
+        LCPU_RD_SET_ADDR(OFF_ARP_SENDER_IP + i);
+        LCPU_WR_BYTE(OFF_ARP_TARGET_IP + i, LCPU_RD_DATA8());
+    }
+
+    // Pad to 64 bytes
+    for (i = 42; i < 64; i++) {
+        LCPU_WR_BYTE(i, 0);
+    }
+
+    LCPU_WR_PUSH_PACKET(64);
 }
