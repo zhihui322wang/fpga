@@ -1,84 +1,106 @@
 // ip.c — IPv4 层: 校验头 + 协议分派
 
-#include "lcpu_general.h"
-#include "ip.h"
-#include "icmp.h"
-#include <string.h>
+#include "inc/lcpu_general.h"
+#include "inc/comlib.h"
+#include "inc/ip.h"
 
-// 16 位反码求和, 进位回卷
-uint16_t ip_calc_checksum(const uint8_t *data, uint16_t byte_len) {
-    if (byte_len == 0) return 0xFFFF;
+uint32 src_ip;
+uint16 ip_total_len;
 
-    uint32_t sum = 0;
-    uint16_t word_cnt = byte_len / 2;
+uint16 ip_proc() {
+    uint32 fifo_data = 0;
+    uint32 ip_protocol_type = 0;
+    src_ip = 0;
 
-    for (uint16_t i = 0; i < word_cnt; i++) {
-        uint16_t w = (data[i*2] << 8) | data[i*2 + 1];
-        sum += w;
-        while (sum >> 16)
-            sum = (sum & 0xFFFF) + (sum >> 16);
+    // 校验 Version=4, IHL>=5
+    LCPU_RD_SET_ADDR(OFF_IP_VER_IHL);
+    uint8 ver_ihl = LCPU_RD_DATA8();
+    if ((ver_ihl & 0xF0) != 0x40) return NO_PROC;
+    if ((ver_ihl & 0x0F) < 5)    return NO_PROC;
+
+    // 目的 IP 必须是本机
+    uint32 i = 0;
+    for (i = 0; i < 4; i++) {
+        LCPU_RD_SET_ADDR(OFF_IP_DST_IP + i);
+        fifo_data = LCPU_RD_DATA8();
+        if (fifo_data != ((Local_IP_ADDR >> (24 - i * 8)) & 0xFF))
+            return NO_PROC;
     }
 
-    // 奇数长度尾部补零
-    if (byte_len & 1) {
-        sum += (uint16_t)(data[byte_len - 1] << 8);
-        while (sum >> 16)
-            sum = (sum & 0xFFFF) + (sum >> 16);
+    // 读源 IP
+    for (i = 0; i < 4; i++) {
+        LCPU_RD_SET_ADDR(OFF_IP_SRC_IP + i);
+        fifo_data = LCPU_RD_DATA8();
+        src_ip |= (uint32)(fifo_data << (24 - i * 8));
     }
 
-    return (uint16_t)(~sum);
+    // 读协议号
+    LCPU_RD_SET_ADDR(OFF_IP_PROTO);
+    ip_protocol_type = LCPU_RD_DATA8();
+
+    // 读 IP 总长度
+    LCPU_RD_SET_ADDR(OFF_IP_TOTAL_LEN);
+    fifo_data = LCPU_RD_DATA8();
+    ip_total_len = fifo_data * 256;
+    LCPU_RD_SET_ADDR(OFF_IP_TOTAL_LEN + 1);
+    fifo_data = LCPU_RD_DATA8();
+    ip_total_len = ip_total_len + fifo_data;
+
+    if (ip_protocol_type == IP_PROTOCOL_ICMP) return ICMP_PROC;
+    if (ip_protocol_type == IP_PROTOCOL_UDP)  return UDP_PROC;
+    if (ip_protocol_type == IP_PROTOCOL_TCP)  return TCP_PROC;
+
+    return NO_PROC;
 }
 
-// 交换 SrcIP ↔ DstIP, 清零 checksum 重算
-void ip_swap_src_dst(uint8_t *frame) {
-    uint8_t tmp[4];
-    memcpy(tmp, &frame[OFF_IP_SRC_IP], 4);
-    memcpy(&frame[OFF_IP_SRC_IP], &frame[OFF_IP_DST_IP], 4);
-    memcpy(&frame[OFF_IP_DST_IP], tmp, 4);
+// IP 头校验和: 逐字节遍历 20 字节头, 跳过 checksum 字段, 替换 total_len
+uint16 ip_header_checksum(uint16 total_len, uint16 checksum_ini) {
+    uint16 ip_checksum = checksum_ini;
+    uint32 hi_byte = 0;
+    uint32 fifo_data = 0;
 
-    frame[OFF_IP_CHECKSUM]     = 0;
-    frame[OFF_IP_CHECKSUM + 1] = 0;
-    uint16_t ck = ip_calc_checksum(&frame[OFF_IP_VER_IHL], IP_HEADER_LEN);
-    frame[OFF_IP_CHECKSUM]     = (ck >> 8) & 0xFF;
-    frame[OFF_IP_CHECKSUM + 1] =  ck       & 0xFF;
+    uint32 i = 0;
+    for (i = eth_header_len; i < eth_header_len + ip_header_len; i++) {
+        LCPU_RD_SET_ADDR(i);
+        fifo_data = LCPU_RD_DATA8();
+        if (i == OFF_IP_CHECKSUM || i == OFF_IP_CHECKSUM + 1) fifo_data = 0;
+        if (i == OFF_IP_TOTAL_LEN)     fifo_data = (total_len >> 8) & 0xFF;
+        if (i == OFF_IP_TOTAL_LEN + 1) fifo_data = (total_len >> 0) & 0xFF;
+        if (i % 2 == 0) {
+            hi_byte = fifo_data;
+        } else {
+            ip_checksum = cks_sum_cal(hi_byte, fifo_data, ip_checksum);
+        }
+    }
+    return ~ip_checksum;
 }
 
-// IP 包主处理
-int ip_process(uint8_t *frame, uint16_t len) {
-    if (len < ETH_HEADER_LEN + IP_HEADER_LEN)
-        return 0;
-
-    // 只支持 IPv4, 标准 20 字节头
-    uint8_t ver_ihl = frame[OFF_IP_VER_IHL];
-    if (((ver_ihl >> 4) != 4) || ((ver_ihl & 0x0F) != 5))
-        return 0;
-
-    // 校验 IP 头 (用副本, 不污染帧)
-    uint8_t hdr[IP_HEADER_LEN];
-    memcpy(hdr, &frame[OFF_IP_VER_IHL], IP_HEADER_LEN);
-    uint16_t orig_cs = (hdr[OFF_IP_CHECKSUM - OFF_IP_VER_IHL] << 8)
-                     |  hdr[OFF_IP_CHECKSUM - OFF_IP_VER_IHL + 1];
-    hdr[OFF_IP_CHECKSUM - OFF_IP_VER_IHL]     = 0;
-    hdr[OFF_IP_CHECKSUM - OFF_IP_VER_IHL + 1] = 0;
-    uint16_t calc_cs = ip_calc_checksum(hdr, IP_HEADER_LEN);
-
-    uint32_t cs_sum = (uint32_t)orig_cs + (uint32_t)calc_cs;
-    while (cs_sum >> 16)
-        cs_sum = (cs_sum & 0xFFFF) + (cs_sum >> 16);
-    if ((uint16_t)cs_sum != 0xFFFF)
-        return 0;
-
-    // 目的 IP 不是本机 → 丢弃
-    uint32_t dst = ((uint32_t)frame[OFF_IP_DST_IP]   << 24)
-                 | ((uint32_t)frame[OFF_IP_DST_IP+1] << 16)
-                 | ((uint32_t)frame[OFF_IP_DST_IP+2] <<  8)
-                 |  (uint32_t)frame[OFF_IP_DST_IP+3];
-    if (dst != LOCAL_IP_ADDR)
-        return 0;
-
-    // 按协议号分派
-    if (frame[OFF_IP_PROTO] == IP_PROTO_ICMP)
-        return icmp_process(frame, len);
-
-    return 0;
+// 写 TX FIFO: 复制 IP 头, 替换 src_ip/dst_ip/total_len/checksum
+void ip_header_update(uint32 src_ip, uint16 total_len) {
+    uint16 ip_checksum = ip_header_checksum(total_len, 0);
+    uint32 i = 0;
+    for (i = eth_header_len; i < eth_header_len + ip_header_len; i++) {
+        LCPU_WR_SET_ADDR(i);
+        if (i >= OFF_IP_TOTAL_LEN && i < OFF_IP_TOTAL_LEN + 2) {
+            LCPU_WR_SET_DATA((total_len >> (8 - (i - OFF_IP_TOTAL_LEN) * 8)) & 0xFF);
+            LCPU_WR_PULSE_WEN();
+        }
+        else if (i >= OFF_IP_SRC_IP && i < OFF_IP_SRC_IP + 4) {
+            LCPU_WR_SET_DATA((Local_IP_ADDR >> (24 - (i - OFF_IP_SRC_IP) * 8)) & 0xFF);
+            LCPU_WR_PULSE_WEN();
+        }
+        else if (i >= OFF_IP_DST_IP && i < OFF_IP_DST_IP + 4) {
+            LCPU_WR_SET_DATA((src_ip >> (24 - (i - OFF_IP_DST_IP) * 8)) & 0xFF);
+            LCPU_WR_PULSE_WEN();
+        }
+        else if (i >= OFF_IP_CHECKSUM && i < OFF_IP_CHECKSUM + 2) {
+            LCPU_WR_SET_DATA((ip_checksum >> (8 - (i - OFF_IP_CHECKSUM) * 8)) & 0xFF);
+            LCPU_WR_PULSE_WEN();
+        }
+        else {
+            LCPU_RD_SET_ADDR(i);
+            LCPU_WR_SET_DATA(LCPU_RD_DATA8());
+            LCPU_WR_PULSE_WEN();
+        }
+    }
 }

@@ -1,61 +1,70 @@
-// eth.c — 以太网帧收发, 对接硬件 RX/TX FIFO
+// eth.c — 以太网帧解析 + MAC 头预写到 TX FIFO
 
-#include "lcpu_general.h"
-#include "eth.h"
-#include <string.h>
+#include "inc/lcpu_general.h"
 
-static const uint8_t my_mac[6] = {
-    LOCAL_MAC_BYTE0, LOCAL_MAC_BYTE1, LOCAL_MAC_BYTE2,
-    LOCAL_MAC_BYTE3, LOCAL_MAC_BYTE4, LOCAL_MAC_BYTE5
-};
+uint16 eth_proc()
+{
+    uint32 fifo_data = 0;
+    uint16 eth_type = 0;
 
-// 从 RX FIFO 读一帧到 buf, 返回 0 成功 / -1 无包 / -2 超长
-int eth_rx_frame(uint8_t *buf, uint16_t *len) {
-    if (LCPU_RD_EMPTY())
-        return -1;
+    // 读 EtherType (字节 12-13)
+    LCPU_RD_SET_ADDR(OFF_ETH_TYPE);
+    fifo_data = LCPU_RD_DATA8();
+    eth_type = (uint16)fifo_data << 8;
+    LCPU_RD_SET_ADDR(OFF_ETH_TYPE + 1);
+    fifo_data = LCPU_RD_DATA8();
+    eth_type = eth_type | fifo_data;
 
-    LCPU_RD_START_PACKET();
-    *len = LCPU_RD_PKT_LEN();
-
-    if (*len > ETH_MAX_FRAME_LEN) {
-        LCPU_RD_STOP();
-        HW_REG8(REG_RX_PKT_POP) = 1;
-        return -2;
+    if (eth_type == ETH_TYPE_ARP) {
+        return ARP_PROC;
     }
+    else if (eth_type == ETH_TYPE_IP) {
+        // 读目的 MAC 高 4 字节 (raddr 0→4)
+        uint32 dst_mac_high = 0;
+        LCPU_RD_SET_ADDR(OFF_ETH_DST_MAC);
+        dst_mac_high  = (uint32)LCPU_RD_DATA8() << 24;
+        LCPU_RD_INC_ADDR();
+        dst_mac_high |= (uint32)LCPU_RD_DATA8() << 16;
+        LCPU_RD_INC_ADDR();
+        dst_mac_high |= (uint32)LCPU_RD_DATA8() << 8;
+        LCPU_RD_INC_ADDR();
+        dst_mac_high |= (uint32)LCPU_RD_DATA8();
+        LCPU_RD_INC_ADDR();  // raddr now at 4
 
-    for (uint16_t i = 0; i < *len; i++) {
-        LCPU_RD_SET_ADDR(i);
-        buf[i] = LCPU_RD_DATA8();
+        // 读目的 MAC 低 2 字节 (raddr 4→6)
+        uint32 dst_mac_low = 0;
+        dst_mac_low  = (uint32)LCPU_RD_DATA8() << 8;
+        LCPU_RD_INC_ADDR();
+        dst_mac_low |= (uint32)LCPU_RD_DATA8();
+
+        // MAC 不是本机也不是广播 → 丢弃
+        if (dst_mac_high != Local_MAC_HIGH || dst_mac_low != (uint32)Local_MAC_LOW) {
+            return NO_PROC;
+        }
+
+        // 预写源 MAC (本机 MAC) 到 TX FIFO 字节 6-11
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 0, (Local_MAC_HIGH >> 24) & 0xFF);
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 1, (Local_MAC_HIGH >> 16) & 0xFF);
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 2, (Local_MAC_HIGH >> 8) & 0xFF);
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 3, (Local_MAC_HIGH >> 0) & 0xFF);
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 4, (Local_MAC_LOW >> 8) & 0xFF);
+        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 5, (Local_MAC_LOW >> 0) & 0xFF);
+
+        // 交换 MAC: 拷贝接收的源 MAC → TX 目的 MAC (字节 0-5)
+        uint32 i;
+        for (i = 0; i < 6; i++) {
+            LCPU_RD_SET_ADDR(OFF_ETH_SRC_MAC + i);
+            fifo_data = LCPU_RD_DATA8();
+            LCPU_WR_BYTE(OFF_ETH_DST_MAC + i, fifo_data);
+        }
+
+        // 拷贝 EtherType
+        LCPU_WR_BYTE(OFF_ETH_TYPE,     (eth_type >> 8) & 0xFF);
+        LCPU_WR_BYTE(OFF_ETH_TYPE + 1, (eth_type >> 0) & 0xFF);
+
+        return IP_PROC;
     }
-
-    LCPU_RD_STOP();
-    HW_REG8(REG_RX_PKT_POP) = 1;
-    return 0;
-}
-
-// 将 buf 整帧推入 TX FIFO 发送
-void eth_tx_frame(const uint8_t *buf, uint16_t len) {
-    if (len == 0) return;
-
-    uint32_t timeout = 1000000;
-
-    while (LCPU_WR_FULL() && --timeout);
-    if (!timeout) return;
-
-    for (uint16_t i = 0; i < len; i++) {
-        timeout = 1000000;
-        while (LCPU_WR_FULL() && --timeout);
-        if (!timeout) return;
-
-        reg32_write(REG_TX_WADDR, (uint32_t)i);
-        reg32_write(REG_TX_WDATA, (uint32_t)buf[i]);
-        LCPU_WR_PULSE_WEN();
+    else {
+        return NO_PROC;
     }
-
-    reg32_write(REG_TX_PKT_LEN, (uint32_t)len);
-    HW_REG8(REG_TX_PKT_PUSH) = 1;
-}
-
-void eth_get_mac(uint8_t *mac) {
-    memcpy(mac, my_mac, 6);
 }
