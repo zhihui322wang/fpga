@@ -3,9 +3,6 @@
 Thumbs.db
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
 # Python cache
 __pycache__/
@@ -29,7 +26,6 @@ toolchain/out_*/
 *.hex
 
 # Simulation artifacts
-sim/work/
 sim/*.vvp
 sim/*.vcd
 sim/*.log
@@ -40,37 +36,23 @@ sim/transcript
 sim/*.gtkw
 sim/*.fst
 
-# Modelsim/Questa
-work/
-vsim.wlf
-transcript
-vlog.opt
-*.vstf
-modelsim.ini
-
 # Xilinx/Vivado
 par_xilinx/
 .xil/
 vivado_*.backup.jou
 vivado_*.backup.log
-.vivado/
-*.Xil/
 *.cache/
 *.gen/
 *.hw/
 *.ip_user_files/
 *.runs/
 *.sim/
-*.tmp/
 NAMEDATABASE/
 *.jou
 *.log
-*.str
-*.debug_log
 *.xpr
 *.backup.jou
 *.backup.log
-webtalk*.log
 usage_statistics_webtalk.*
 
 # Vivado build dir (keep srcs/ and constrs_1/)
@@ -115,6 +97,5 @@ hwcos/
 *.qst
 *.qsf_bak
 *.tcl~
-
 # Build outputs
 c_build/out/
