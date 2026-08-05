@@ -26,6 +26,7 @@ toolchain/out_*/
 *.hex
 
 # Simulation artifacts
+sim/work/
 sim/*.vvp
 sim/*.vcd
 sim/*.log

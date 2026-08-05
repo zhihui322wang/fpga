@@ -429,6 +429,7 @@ module ERROR__addr_width_must_be_gte_alloc_addr_bits__single_clock_tdp ();
 endmodule
 
 // synthesis translate_off
+`ifndef IVL_SIM
 module tb_single_clock_true_dual_port_ram;
 
   parameter data_width = 8;
@@ -504,5 +505,6 @@ module tb_single_clock_true_dual_port_ram;
     // // $finish; (stripped) (stripped for sim)
   end
 endmodule
+`endif // IVL_SIM
 // synthesis translate_on
 

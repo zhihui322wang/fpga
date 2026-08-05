@@ -151,6 +151,7 @@ endmodule
 /* verilator lint_off ASSIGNDLY */
 /* verilator lint_off WIDTH */
 /* synthesis translate_off */
+`ifndef IVL_SIM
 module tb_riscv32_top;
 
   localparam instr_databits = 32;
@@ -329,4 +330,5 @@ module tb_riscv32_top;
     // // $finish; (stripped) (stripped for sim)
   end
 endmodule
+`endif // IVL_SIM
 /* synthesis translate_on */

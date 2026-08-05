@@ -131,6 +131,7 @@ endmodule
 
 // synthesis translate_off
 
+`ifndef IVL_SIM
 module tb_gmii2mac ();
 
   // ── CRC32 计算 ────────────────────────────────────────
@@ -512,5 +513,6 @@ module tb_gmii2mac ();
     $dumpvars(0, tb_gmii2mac);
   end
 endmodule
+`endif // IVL_SIM
 
 // synthesis translate_on

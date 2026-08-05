@@ -1,6 +1,5 @@
 module lcpu_riscv_wrapper #(
     parameter sim_mod = 0,
-    parameter script_file = "../tcl/InstructRAM.tcl",
 
     parameter lcpu_type = "xilinx",  //"intel";	"xilinx"; "uart"
     parameter uart_baud_rate = 115200,
@@ -76,8 +75,7 @@ module lcpu_riscv_wrapper #(
     end else begin : lcpu_sim
       lcpu_bfm #(
           .read_time_out(2000),
-          .delay_time   (1000),
-          .script_file  ("../tcl/InstructRAM.tcl")
+          .delay_time   (1000)
       ) u_lcpu_bfm (
           .clk    (clk),
           .reset_l(reset_l),

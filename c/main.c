@@ -6,6 +6,7 @@
 #include "inc/arp.h"
 #include "inc/ip.h"
 #include "inc/icmp.h"
+#include "inc/tcp.h"
 
 __attribute__((naked, used, section(".text.bootloader")))
 void reset_entry() {
@@ -36,10 +37,12 @@ void program_main() {
 #endif
     LCPU_SET_LED(0x00);
 
+    tcp_init();
+
     uint32 led_val = 0x01;
 
     while (1) {
-        /* LED 心跳：每 ~1s 切换（基于硬件 rdcycle）*/
+        // LED 心跳
         {
             static uint32 last_toggle = 0;
             uint32 now = LCPU_LOCAL_TIME_L();
@@ -68,6 +71,8 @@ void program_main() {
             uint16 iptype = ip_proc();
             if (iptype == ICMP_PROC) {
                 icmp_reply();
+            } else if (iptype == TCP_PROC) {
+                tcp_proc();
             }
         }
 

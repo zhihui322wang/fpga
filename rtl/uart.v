@@ -116,6 +116,7 @@ module uart (
 endmodule
 
 // synthesis translate_off
+`ifndef IVL_SIM  // iverilog 仿真时跳过, 避免抢读 RX FIFO
 
 module tb_uart ();
 
@@ -387,4 +388,5 @@ module tb_uart ();
   end
 endmodule
 
+`endif // IVL_SIM
 // synthesis translate_on

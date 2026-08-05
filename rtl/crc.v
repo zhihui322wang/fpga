@@ -1274,6 +1274,7 @@ endmodule  // crc
 // Testbench: tb_crc
 // Tests CRC16-CCITT with 8-bit input, using known vector "123456789" → 0x29B1
 //=============================================================================
+`ifndef IVL_SIM
 module tb_crc;
 
   // DUT parameters
@@ -1387,3 +1388,4 @@ module tb_crc;
     // // $finish; (stripped) (stripped for sim)
   end
 endmodule
+`endif // IVL_SIM

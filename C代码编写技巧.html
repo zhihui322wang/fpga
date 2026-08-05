@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>C代码编写技巧</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+       max-width: 900px; margin: 40px auto; padding: 0 20px; line-height: 1.6;
+       color: #24292e; background: #fff; }
+h1 { border-bottom: 2px solid #1a73e8; padding-bottom: 8px; color: #1a73e8; }
+h2 { border-bottom: 1px solid #e1e4e8; padding-bottom: 6px; margin-top: 32px; }
+h3 { margin-top: 24px; color: #444; }
+h4 { margin-top: 20px; color: #666; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th, td { border: 1px solid #dfe2e5; padding: 8px 12px; text-align: left; }
+th { background: #f5f7fa; font-weight: 600; }
+tr:nth-child(even) { background: #fafbfc; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto;
+      border: 1px solid #e1e4e8; font-size: 13px; line-height: 1.45; }
+div.mermaid {
+    background: #fff;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 16px 0;
+    text-align: center;
+    overflow-x: auto;
+}
+script[type="WaveDrom"] {
+    display: block;
+    background: #fff;
+    border: 1px solid #e1e4e8;
+    border-radius: 6px;
+    padding: 16px;
+    margin: 16px 0;
+    overflow-x: auto;
+    white-space: pre;
+    font-family: monospace;
+}
+blockquote { border-left: 4px solid #1a73e8; margin: 0; padding: 0 16px;
+             color: #6a737d; }
+hr { border: 0; border-top: 1px solid #e1e4e8; margin: 24px 0; }
+ul, ol { padding-left: 24px; }
+a { color: #1a73e8; text-decoration: none; }
+a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<h1 id="C-代码编写技巧">C 代码编写技巧</h1>
+
+<p>> 项目: RISC-V WebSoC | 日期: 2026-08-05</p>
+
+<hr>
+
+<h2 id="目录">目录</h2>
+
+<table class="md-table">
+<thead><tr>
+<th>第一部分：.h 头文件的编写</th>
+<th>第二部分：.c 源文件的编写</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><a href="#h-top">1.1 整体构成 + 完整示例</a></td>
+<td><a href="#c-top">2.1 整体构成 + 完整示例</a></td>
+</tr>
+<tr>
+<td><a href="#h-macro">1.2 宏定义 <code>#define</code></a></td>
+<td><a href="#c-include">2.2 <code>#include</code> 包含头文件</a></td>
+</tr>
+<tr>
+<td><a href="#h-typedef">1.3 <code>typedef</code> 类型别名</a></td>
+<td><a href="#c-var-def">2.3 全局变量定义</a></td>
+</tr>
+<tr>
+<td><a href="#h-struct">1.4 <code>struct</code> 结构体</a></td>
+<td><a href="#c-func-def">2.4 函数定义（实现）</a></td>
+</tr>
+<tr>
+<td><a href="#h-extern">1.5 <code>extern</code> 全局变量声明</a></td>
+<td><a href="#c-static">2.5 <code>static</code> 文件内私有</a></td>
+</tr>
+<tr>
+<td><a href="#h-func-decl">1.6 函数声明</a></td>
+<td><a href="#c-main">2.6 <code>main()</code> 程序入口</a></td>
+</tr>
+<tr>
+<td><a href="#h-compare">1.7 核心概念对比</a></td>
+<td><a href="#c-compare">2.7 .h 与 .c 联动总结</a></td>
+</tr>
+<tr>
+<td><a href="#h-guard">1.8 Include Guard</a></td>
+<td></td>
+</tr>
+<tr>
+<td><a href="#appendix">附录：C 数据类型速查</a></td>
+<td></td>
+</tr>
+</tbody></table>
+
+<hr>
+
+<h2 id="第一部分h-头文件的编写">第一部分：.h 头文件的编写</h2>
+
+<hr>
+
+<a id="h-top"></a>
+
+<h3 id="11-整体构成完整示例-拆解表">1.1 整体构成：完整示例 + 拆解表</h3>
+
+<code>.h</code> 文件包含 6 种内容。下面是完整示例（点击注释中的蓝色链接跳转到详解）：
+
+<pre style="background:#1e1e1e;color:#e0e0e0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:14px;line-height:1.8;font-family:'Consolas','Monaco','Courier New',monospace;">
+<code style="background:transparent;color:inherit;font-size:inherit;padding:0;"><span style="color:#6a9955;">// my_module.h — .h 头文件完整示例 (点击蓝色链接跳转详解)</span>
+
+<a href="#h-guard" style="color:#4fc1ff;font-weight:bold;">① Include Guard</a> — <span style="color:#6a9955;">防重复包含</span>
+<span style="color:#c586c0;">#ifndef</span> _MY_MODULE_H_
+<span style="color:#c586c0;">#define</span> _MY_MODULE_H_
+
+<span style="color:#6a9955;">// 包含其他头文件</span>
+<span style="color:#c586c0;">#include</span> <span style="color:#ce9178;">&lt;stdint.h&gt;</span>
+
+<a href="#h-macro" style="color:#4fc1ff;font-weight:bold;">② 宏定义</a> — <span style="color:#6a9955;">预处理文本替换</span>
+<span style="color:#c586c0;">#define</span> MAX_BUFFER_SIZE 1024
+<span style="color:#c586c0;">#define</span> PI 3.14159
+
+<a href="#h-typedef" style="color:#4fc1ff;font-weight:bold;">③ typedef 类型别名</a> — <span style="color:#6a9955;">给类型起短名</span>
+<span style="color:#569cd6;">typedef</span> <span style="color:#4ec9b0;">unsigned</span> <span style="color:#4ec9b0;">int</span> uint32;
+
+<a href="#h-struct" style="color:#4fc1ff;font-weight:bold;">④ 结构体</a> — <span style="color:#6a9955;">自定义复合类型</span>
+<span style="color:#569cd6;">typedef</span> <span style="color:#569cd6;">struct</span> {
+    <span style="color:#4ec9b0;">int</span> x;
+    <span style="color:#4ec9b0;">int</span> y;
+} Point;
+
+<a href="#h-extern" style="color:#4fc1ff;font-weight:bold;">⑤ extern 全局变量声明</a> — <span style="color:#6a9955;">只声明不定义</span>
+<span style="color:#569cd6;">extern</span> <span style="color:#4ec9b0;">int</span> g_system_status;
+
+<a href="#h-func-decl" style="color:#4fc1ff;font-weight:bold;">⑥ 函数声明</a> — <span style="color:#6a9955;">只写函数头，不写实现</span>
+<span style="color:#4ec9b0;">int</span> add(<span style="color:#4ec9b0;">int</span> a, <span style="color:#4ec9b0;">int</span> b);
+<span style="color:#4ec9b0;">void</span> print_point(Point p);
+
+<a href="#h-guard" style="color:#4fc1ff;font-weight:bold;">① Include Guard 结束</a>
+<span style="color:#c586c0;">#endif</span> <span style="color:#6a9955;">// _MY_MODULE_H_</span></code></pre>
+
+<p>下面逐项拆解：</p>
+
+<table class="md-table">
+<thead><tr>
+<th>#</th>
+<th>内容类别</th>
+<th>关键字</th>
+<th>作用</th>
+<th>写在 .h 还是 .c？</th>
+<th>项目实例</th>
+<th>跳转</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Include Guard</strong></td>
+<td><code>#ifndef</code></td>
+<td>防重复包含</td>
+<td>.h (头尾)</td>
+<td><code>#ifndef _LCPU_GEN_H_</code></td>
+<td><a href="#h-guard">→ 1.8</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>宏定义</strong></td>
+<td><code>#define</code></td>
+<td>预处理文本替换</td>
+<td>.h</td>
+<td><code>#define ETH_TYPE_IP 0x0800</code></td>
+<td><a href="#h-macro">→ 1.2</a></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>类型别名</strong></td>
+<td><code>typedef</code></td>
+<td>给类型起短名</td>
+<td>.h</td>
+<td><code>typedef unsigned int uint32;</code></td>
+<td><a href="#h-typedef">→ 1.3</a></td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>结构体</strong></td>
+<td><code>struct</code></td>
+<td>自定义复合类型</td>
+<td>.h</td>
+<td><code>typedef struct {...} tcp_conn_t;</code></td>
+<td><a href="#h-struct">→ 1.4</a></td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>全局变量声明</strong></td>
+<td><code>extern</code></td>
+<td>跨文件共享，只声明不定义</td>
+<td>.h</td>
+<td><code>extern uint32 src_ip;</code></td>
+<td><a href="#h-extern">→ 1.5</a></td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>函数声明</strong></td>
+<td>函数签名</td>
+<td>告知编译器函数接口</td>
+<td>.h</td>
+<td><code>uint16_t tcp_proc(void);</code></td>
+<td><a href="#h-func-decl">→ 1.6</a></td>
+</tr>
+</tbody></table>
+
+<hr>
+
+<a id="h-macro"></a>
+
+<h3 id="12-宏定义">1.2 宏定义</h3>
+
+<h4 id="写法-1简单常量">写法 1：简单常量</h4>
+
+<pre><code class="language-c">
+#define PI          3.14159     // 数字常量
+#define MAX_SIZE    1024        // 整数常量
+#define LOCAL_IP    0xA9FE0101  // 十六进制常量
+
+</code></pre>
+
+<h4 id="写法-2带参数的宏函数">写法 2：带参数的宏函数</h4>
+
+<pre><code class="language-c">
+#define MAX(a, b)  ((a) &gt; (b) ? (a) : (b))   // 取最大值
+#define ABS(x)     ((x) &lt; 0 ? -(x) : (x))    // 取绝对值
+
+</code></pre>
+
+<p>> ⚠️ 每个参数和整体都要加括号，否则展开后优先级可能出错。</p>
+
+<h4 id="写法-3条件编译">写法 3：条件编译</h4>
+
+<pre><code class="language-c">
+#define SIM_FAST   // 定义标记
+
+<p>#ifdef SIM_FAST<br>
+    // 仿真模式<br>
+#else<br>
+    // 上板模式<br>
+#endif</p>
+
+</code></pre>
+
+<h4 id="项目实例-lcpu_generalh">项目实例 (lcpu_general.h)</h4>
+
+<pre><code class="language-c">
+#define FIFO_BASE       0x80000000
+#define ETH_TYPE_IP     0x0800
+#define IP_PROTOCOL_TCP 0x06
+#define TCP_FLAG_SYN    0x02
+
+</code></pre>
+
+<a href="#h-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="h-typedef"></a>
+
+<h3 id="13-typedef类型别名">1.3 typedef：类型别名</h3>
+
+<h4 id="写法-1基本类型别名最常用">写法 1：基本类型别名（最常用）</h4>
+
+<pre><code class="language-c">
+typedef unsigned char  uint8;    // 1 字节
+typedef unsigned short uint16;   // 2 字节
+typedef unsigned int   uint32;   // 4 字节
+
+</code></pre>
+
+<h4 id="写法-2结构体别名">写法 2：结构体别名</h4>
+
+<pre><code class="language-c">
+typedef struct {
+    uint32_t remote_ip;
+    uint16_t remote_port;
+    uint8_t  state;
+} tcp_conn_t;   // 直接用 tcp_conn_t，不用写 struct
+
+</code></pre>
+
+<h4 id="写法-3函数指针别名">写法 3：函数指针别名</h4>
+
+<pre><code class="language-c">
+typedef void (*callback_t)(int arg);  // callback_t 是函数指针类型
+
+</code></pre>
+
+<h4 id="项目实例-lcpu_generalh">项目实例 (lcpu_general.h)</h4>
+
+<pre><code class="language-c">
+typedef unsigned char   uint8;
+typedef unsigned short  uint16;
+typedef unsigned int    uint32;
+
+</code></pre>
+
+<a href="#h-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="h-struct"></a>
+
+<h3 id="14-结构体">1.4 结构体</h3>
+
+<h4 id="struct-的三种写法">struct 的三种写法</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>写法</th>
+<th>代码</th>
+<th>声明变量时</th>
+<th>适用场景</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>基础写法</strong></td>
+<td><code>struct Point { int x; int y; };</code></td>
+<td><code>struct Point p;</code> (必须带 struct)</td>
+<td>C 标准传统</td>
+</tr>
+<tr>
+<td><strong>typedef 写法</strong></td>
+<td><code>typedef struct { int x; int y; } Point;</code></td>
+<td><code>Point p;</code> (简洁)</td>
+<td><strong>最常用</strong></td>
+</tr>
+<tr>
+<td><strong>带标签 typedef</strong></td>
+<td><code>typedef struct Node { int d; struct Node* n; } Node;</code></td>
+<td><code>Node n;</code></td>
+<td>链表自引用</td>
+</tr>
+</tbody></table>
+
+<h4 id="项目实例寄存器映射">项目实例：寄存器映射</h4>
+
+<pre><code class="language-c">
+// lcpu_general.h — 用结构体映射硬件寄存器地址
+typedef struct {
+    uint32 _pad[16];   // 前 16 个字是其他寄存器
+    uint32 led;        // 偏移 0x40 是 LED 寄存器
+} str_my_reg;
+
+<p>#define LCPU_BASE  0x80000000<br>
+((volatile str_my_reg*)LCPU_BASE)-&gt;led = 0x0F;  // 通过指针访问硬件</p>
+
+</code></pre>
+
+<a href="#h-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="h-extern"></a>
+
+<h3 id="15-extern全局变量声明">1.5 extern：全局变量声明</h3>
+
+<h4 id="规则">规则</h4>
+
+<pre><code>
+.h 文件中:  extern int g_count;     ← 声明（不分配内存，可多次出现）
+.c 文件中:  int g_count = 10;      ← 定义（分配内存，仅一次）  ← 见第二部分2.3
+
+</code></pre>
+
+<h4 id="图解">图解</h4>
+
+<pre><code>
+lcpu_general.h              ip.c                    main.c
+┌─────────────────┐    ┌──────────────┐    ┌──────────────┐
+│ extern int x;    │←───│ int x = 10;   │    │ #include "h"  │
+│ (声明，不占内存)  │    │ (定义，占 4B)  │    │ x = 20; // OK  │
+└─────────────────┘    └──────────────┘    └──────────────┘
+      ↑ 任何 #include 的 .c 都能用 x
+
+</code></pre>
+
+<h4 id="项目实例">项目实例</h4>
+
+<pre><code class="language-c">
+// lcpu_general.h — 声明
+extern uint32 src_ip;
+extern uint16 src_port;
+
+<p>// ip.c — 定义（见第二部分2.3）<br>
+uint32 src_ip;<br>
+uint16 src_port;</p>
+
+</code></pre>
+
+<a href="#h-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="h-func-decl"></a>
+
+<h3 id="16-函数声明">1.6 函数声明</h3>
+
+<h4 id="只写函数头末尾有分号">只写函数头，末尾有分号</h4>
+
+<pre><code class="language-c">
+// tcp.h
+void     tcp_init(void);                         // 无参数，无返回值
+uint16_t tcp_proc(void);                          // 无参数，返回 uint16_t
+void     tcp_send_syn_ack(int slot);              // 有参数，无返回值
+
+</code></pre>
+
+<h4 id="对比声明-vs-定义">对比：声明 vs 定义</h4>
+
+<table class="md-table">
+<thead><tr>
+<th></th>
+<th>函数声明 (在 .h)</th>
+<th>函数定义 (在 .c，见第二部分2.4)</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>写法</strong></td>
+<td><code>int add(int a, int b);</code> ← 有分号</td>
+<td><code>int add(int a, int b) { ... }</code> ← 有大括号</td>
+</tr>
+<tr>
+<td><strong>可省略参数名</strong></td>
+<td>✅ <code>int add(int, int);</code></td>
+<td>❌ 必须写参数名</td>
+</tr>
+<tr>
+<td><strong>作用</strong></td>
+<td>告诉编译器"这个函数存在"</td>
+<td>生成机器码</td>
+</tr>
+</tbody></table>
+
+<a href="#h-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="h-compare"></a>
+
+<h3 id="17-核心概念对比">1.7 核心概念对比</h3>
+
+<h4 id="声明-vs-定义">声明 vs 定义</h4>
+
+<table class="md-table">
+<thead><tr>
+<th></th>
+<th>声明</th>
+<th>定义</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>分配内存</strong></td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><strong>出现次数</strong></td>
+<td>多次</td>
+<td>仅一次</td>
+</tr>
+<tr>
+<td><strong>变量</strong></td>
+<td><code>extern int x;</code></td>
+<td><code>int x = 10;</code></td>
+</tr>
+<tr>
+<td><strong>函数</strong></td>
+<td><code>int add(int,int);</code></td>
+<td><code>int add(int a,int b){...}</code></td>
+</tr>
+</tbody></table>
+
+<h4 id="INLINE_32-vs-INLINE_33"><code>#define</code> vs <code>const</code></h4>
+
+<table class="md-table">
+<thead><tr>
+<th></th>
+<th><code>#define</code></th>
+<th><code>const</code></th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>阶段</strong></td>
+<td>预处理文本替换</td>
+<td>编译期</td>
+</tr>
+<tr>
+<td><strong>类型检查</strong></td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><strong>占内存</strong></td>
+<td>❌</td>
+<td>✅</td>
+</tr>
+<tr>
+<td><strong>带参数</strong></td>
+<td>✅ 宏函数</td>
+<td>❌</td>
+</tr>
+</tbody></table>
+
+<a href="#h-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="h-guard"></a>
+
+<h3 id="18-Include-Guard">1.8 Include Guard</h3>
+
+<h4 id="问题">问题</h4>
+
+<pre><code>
+A.h → include "point.h" ─┐
+                          ├→ main.c 里 struct Point 出现两次 → 编译报错！
+B.h → include "point.h" ─┘
+
+</code></pre>
+
+<h4 id="方式一INLINE_36-INLINE_37-INLINE_38本项目使用">方式一：<code>#ifndef</code> / <code>#define</code> / <code>#endif</code>（本项目使用）</h4>
+
+<pre><code class="language-c">
+#ifndef _MY_MODULE_H_
+#define _MY_MODULE_H_
+
+<p>// ... 头文件全部内容 ...</p>
+
+<p>#endif // _MY_MODULE_H_</p>
+
+</code></pre>
+
+<h4 id="方式二INLINE_39更简洁">方式二：<code>#pragma once</code>（更简洁）</h4>
+
+<pre><code class="language-c">
+#pragma once
+// ... 头文件全部内容 ...
+
+</code></pre>
+
+<h4 id="项目命名规范">项目命名规范</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>头文件</th>
+<th>Guard 宏</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>tcp.h</code></td>
+<td><code>_TCP_H_</code></td>
+</tr>
+<tr>
+<td><code>ip.h</code></td>
+<td><code>_IP_H_</code></td>
+</tr>
+<tr>
+<td><code>eth.h</code></td>
+<td><code>_ETH_H_</code></td>
+</tr>
+<tr>
+<td><code>lcpu_general.h</code></td>
+<td><code>_LCPU_GEN_H_</code></td>
+</tr>
+</tbody></table>
+
+<a href="#h-top">← 返回拆解表</a>
+
+<hr>
+
+<h2 id="第二部分c-源文件的编写">第二部分：.c 源文件的编写</h2>
+
+<hr>
+
+<a id="c-top"></a>
+
+<h3 id="21-整体构成完整示例-拆解表">2.1 整体构成：完整示例 + 拆解表</h3>
+
+<code>.c</code> 文件包含 5 种内容。下面是完整示例（点击注释中的蓝色链接跳转到详解）：
+
+<pre style="background:#1e1e1e;color:#e0e0e0;padding:16px 20px;border-radius:8px;overflow-x:auto;font-size:14px;line-height:1.8;font-family:'Consolas','Monaco','Courier New',monospace;">
+<code style="background:transparent;color:inherit;font-size:inherit;padding:0;"><span style="color:#6a9955;">// my_module.c — .c 源文件完整示例 (点击蓝色链接跳转详解)</span>
+
+<a href="#c-include" style="color:#4fc1ff;font-weight:bold;">① #include 包含头文件</a>
+<span style="color:#c586c0;">#include</span> <span style="color:#ce9178;">"my_module.h"</span>    <span style="color:#6a9955;">// 自己的头文件</span>
+<span style="color:#c586c0;">#include</span> <span style="color:#ce9178;">"inc/lcpu_general.h"</span>  <span style="color:#6a9955;">// 项目公共头文件</span>
+<span style="color:#c586c0;">#include</span> <span style="color:#ce9178;">&lt;stdint.h&gt;</span>           <span style="color:#6a9955;">// 系统头文件</span>
+
+<a href="#c-var-def" style="color:#4fc1ff;font-weight:bold;">② 全局变量定义 (分配内存)</a>
+<span style="color:#4ec9b0;">int</span> g_system_status = <span style="color:#b5cea8;">0</span>;              <span style="color:#6a9955;">// 对应 .h 中 extern int g_system_status;</span>
+<span style="color:#569cd6;">static</span> <span style="color:#4ec9b0;">int</span> s_internal_counter = <span style="color:#b5cea8;">0</span>;  <span style="color:#6a9955;">// static → 仅本文件可见</span>
+
+<a href="#c-func-def" style="color:#4fc1ff;font-weight:bold;">③ 函数定义 (具体实现)</a>
+<span style="color:#4ec9b0;">int</span> <span style="color:#dcdcaa;">add</span>(<span style="color:#4ec9b0;">int</span> a, <span style="color:#4ec9b0;">int</span> b) {
+    <span style="color:#c586c0;">return</span> a + b;                    <span style="color:#6a9955;">// 实现 .h 中声明的函数</span>
+}
+
+<a href="#c-static" style="color:#4fc1ff;font-weight:bold;">④ static 函数 (文件内私有)</a>
+<span style="color:#569cd6;">static</span> <span style="color:#4ec9b0;">void</span> <span style="color:#dcdcaa;">internal_helper</span>(<span style="color:#4ec9b0;">void</span>) {
+    s_internal_counter++;             <span style="color:#6a9955;">// 仅在 .c 内部调用, .h 中不声明</span>
+}
+
+<a href="#c-main" style="color:#4fc1ff;font-weight:bold;">⑤ main() 入口函数</a>
+<span style="color:#4ec9b0;">int</span> <span style="color:#dcdcaa;">main</span>(<span style="color:#4ec9b0;">void</span>) {
+    <span style="color:#dcdcaa;">add</span>(<span style="color:#b5cea8;">3</span>, <span style="color:#b5cea8;">5</span>);                       <span style="color:#6a9955;">// 调用自己实现的函数</span>
+    <span style="color:#c586c0;">return</span> <span style="color:#b5cea8;">0</span>;
+}</code></pre>
+
+<p>下面逐项拆解：</p>
+
+<table class="md-table">
+<thead><tr>
+<th>#</th>
+<th>内容类别</th>
+<th>关键字</th>
+<th>作用</th>
+<th>写在 .h 还是 .c？</th>
+<th>项目实例</th>
+<th>跳转</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>#include</strong></td>
+<td><code>#include</code></td>
+<td>引入头文件，获取声明</td>
+<td>.c (顶部)</td>
+<td><code>#include "inc/tcp.h"</code></td>
+<td><a href="#c-include">→ 2.2</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>全局变量定义</strong></td>
+<td>无/extern 的反面</td>
+<td>实际分配内存空间</td>
+<td>.c</td>
+<td><code>uint32 src_ip;</code></td>
+<td><a href="#c-var-def">→ 2.3</a></td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>函数定义</strong></td>
+<td>函数体 <code>{...}</code></td>
+<td>实现 .h 中声明的函数</td>
+<td>.c</td>
+<td><code>void tcp_init(void){...}</code></td>
+<td><a href="#c-func-def">→ 2.4</a></td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>static</strong></td>
+<td><code>static</code></td>
+<td>限制变量/函数仅本文件可见</td>
+<td>.c</td>
+<td><code>static int counter;</code></td>
+<td><a href="#c-static">→ 2.5</a></td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>main()</strong></td>
+<td><code>main</code></td>
+<td>程序入口</td>
+<td>.c</td>
+<td><code>int main(void){...}</code></td>
+<td><a href="#c-main">→ 2.6</a></td>
+</tr>
+</tbody></table>
+
+<p>> <strong>一句话</strong>：<code>.c</code> = <code>#include</code>声明 + 定义变量(分配内存) + 实现函数(写逻辑)。</p>
+
+<hr>
+
+<a id="c-include"></a>
+
+<h3 id="22-include包含头文件">2.2 #include：包含头文件</h3>
+
+<h4 id="两种写法">两种写法</h4>
+
+<table class="md-table">
+<thead><tr>
+<th>写法</th>
+<th>搜索路径</th>
+<th>用于</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>#include &lt;stdint.h&gt;</code></td>
+<td>系统目录</td>
+<td>标准库头文件</td>
+</tr>
+<tr>
+<td><code>#include "my_module.h"</code></td>
+<td>当前目录 → 系统目录</td>
+<td>自己的头文件</td>
+</tr>
+</tbody></table>
+
+<h4 id="项目实例">项目实例</h4>
+
+<pre><code class="language-c">
+// main.c
+#include "inc/lcpu_general.h"   // 公共定义 (寄存器、协议常量、类型)
+#include "inc/system.h"         // 系统函数声明
+#include "inc/eth.h"            // 以太网层
+#include "inc/arp.h"            // ARP 层
+#include "inc/ip.h"             // IP 层
+#include "inc/icmp.h"           // ICMP 层
+#include "inc/tcp.h"            // TCP 层
+
+</code></pre>
+
+<p>> <strong>原则</strong>：你需要用到哪个模块的函数/变量/宏，就 include 哪个模块的 <code>.h</code>。</p>
+
+<a href="#c-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="c-var-def"></a>
+
+<h3 id="23-全局变量定义">2.3 全局变量定义</h3>
+
+<h4 id="h-声明-c-定义-对照">.h 声明 → .c 定义 对照</h4>
+
+<pre><code>
+┌────────────────────────────────────────────────────────────┐
+│ .h 文件                         .c 文件                     │
+│                                                             │
+│ extern int g_count;      ←→     int g_count = 0;           │
+│ (声明：不占内存)                 (定义：占 4 字节)            │
+│                                                             │
+│ extern uint32 src_ip;    ←→     uint32 src_ip;             │
+│ (声明)                           (定义：未初始化 = 0)        │
+└────────────────────────────────────────────────────────────┘
+
+</code></pre>
+
+<h4 id="项目实例">项目实例</h4>
+
+<pre><code class="language-c">
+// lcpu_general.h — 声明 (不分配内存)
+extern uint32 src_ip;
+extern uint16 src_port;
+extern uint16 ip_total_len;
+
+<p>// ip.c — 定义 (分配内存)<br>
+uint32 src_ip;           // 初始值自动为 0 (在 .bss 段)<br>
+uint16 ip_total_len;     // 初始值自动为 0<br>
+// src_port 未在此定义 → 在别的 .c 中定义</p>
+
+</code></pre>
+
+<a href="#c-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="c-func-def"></a>
+
+<h3 id="24-函数定义实现">2.4 函数定义（实现）</h3>
+
+<h4 id="结构">结构</h4>
+
+<pre><code class="language-c">
+返回值类型  函数名(参数列表) {
+    // 函数体：具体的业务逻辑
+    return 值;  // 如果返回值类型不是 void
+}
+
+</code></pre>
+
+<h4 id="示例arpc-中的函数定义">示例：arp.c 中的函数定义</h4>
+
+<pre><code class="language-c">
+#include "inc/lcpu_general.h"
+
+<p>void arp_reply() {                    // 无返回值，无参数<br>
+    uint16 arp_start = eth_header_len;<br>
+    // ... 构建 ARP 回复包的业务逻辑 ...<br>
+    LCPU_WR_PUSH_PACKET(tx_pkt_len);<br>
+}</p>
+
+</code></pre>
+
+<h4 id="示例ipc-中的函数定义">示例：ip.c 中的函数定义</h4>
+
+<pre><code class="language-c">
+uint16 ip_proc() {                    // 返回 uint16
+    uint8 ver_ihl = LCPU_RD_DATA8();
+    if ((ver_ihl &amp; 0xF0) != 0x40)     // 校验失败
+        return NO_PROC;               // 提前返回
+    // ... 正常处理 ...
+    return ICMP_PROC;                 // 返回处理结果
+}
+
+</code></pre>
+
+<h4 id="示例ipc-中带多个参数的函数">示例：ip.c 中带多个参数的函数</h4>
+
+<pre><code class="language-c">
+uint16 ip_header_checksum(uint16 total_len, uint16 checksum_ini) {
+    uint16 ip_checksum = checksum_ini;   // 使用传入的参数
+    // ... 逐字节计算校验和 ...
+    return ~ip_checksum;                 // 返回计算结果
+}
+
+</code></pre>
+
+<a href="#c-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="c-static"></a>
+
+<h3 id="25-static-的两种用法">2.5 static 的两种用法</h3>
+
+<h4 id="用法-1static-全局变量文件内私有">用法 1：static 全局变量（文件内私有）</h4>
+
+<pre><code class="language-c">
+// my_module.c
+static int s_counter = 0;     // 只有 my_module.c 里的函数能访问
+                               // 其他 .c 文件看不到这个变量
+
+<p>void increment(void) {<br>
+    s_counter++;               // OK：本文件内访问<br>
+}</p>
+
+</code></pre>
+
+<strong>对比普通全局变量</strong>：
+
+<table class="md-table">
+<thead><tr>
+<th></th>
+<th>普通全局变量</th>
+<th>static 全局变量</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>声明</strong></td>
+<td><code>int g_count;</code></td>
+<td><code>static int s_count;</code></td>
+</tr>
+<tr>
+<td><strong>可见范围</strong></td>
+<td>所有 .c 文件 (通过 extern)</td>
+<td>仅本 .c 文件</td>
+</tr>
+<tr>
+<td><strong>.h 中声明</strong></td>
+<td><code>extern int g_count;</code></td>
+<td>不需要（外部不可见）</td>
+</tr>
+<tr>
+<td><strong>命名习惯</strong></td>
+<td><code>g_</code> 前缀</td>
+<td><code>s_</code> 前缀</td>
+</tr>
+</tbody></table>
+
+<h4 id="用法-2static-函数文件内私有">用法 2：static 函数（文件内私有）</h4>
+
+<pre><code class="language-c">
+// my_module.c
+static void internal_helper(void) {  // 仅本文件可见
+    // ... 内部辅助逻辑 ...
+}
+
+<p>void public_api(void) {              // 在 .h 中声明，外部可用<br>
+    internal_helper();               // 内部调用 static 函数<br>
+}</p>
+
+</code></pre>
+
+<p>> <strong>为什么用 static？</strong> 把不需要暴露给外部的函数/变量限制在文件内，避免命名冲突，让接口更清晰。</p>
+
+<h4 id="项目实例">项目实例</h4>
+
+<pre><code class="language-c">
+// main.c — 假设有个内部辅助函数不希望外部调用
+static void delay_cycles(uint32 count) {
+    while (count--) { asm volatile("nop"); }
+}
+
+<p>// program_main() 调用它，但其他 .c 文件看不到 delay_cycles</p>
+
+</code></pre>
+
+<a href="#c-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="c-main"></a>
+
+<h3 id="26-main程序入口">2.6 main()：程序入口</h3>
+
+<h4 id="标准写法">标准写法</h4>
+
+<pre><code class="language-c">
+int main(void) {
+    // 初始化...
+    // 主循环...
+    return 0;
+}
+
+</code></pre>
+
+<h4 id="嵌入式裸机写法RISC-V-软核">嵌入式/裸机写法（RISC-V 软核）</h4>
+
+<pre><code class="language-c">
+// 1. 启动入口：设置栈指针、清零 BSS，然后跳转主程序
+__attribute__((naked, used, section(".text.bootloader")))
+void reset_entry() {
+    asm volatile(
+        "la sp, _stack_top\n"       // 设栈顶
+        "la t0, __bss_start\n"      // BSS 清零
+        "la t1, __bss_end\n"
+        "1:\n"
+        "bgeu t0, t1, 2f\n"
+        "sw zero, 0(t0)\n"
+        "addi t0, t0, 4\n"
+        "j 1b\n"
+        "2:\n"
+        "j program_main\n"          // 跳转到主程序
+    );
+}
+
+<p>// 2. 主程序：无限循环处理<br>
+void program_main(void) {<br>
+    // 初始化<br>
+    LCPU_SET_LED(0x0F);</p>
+
+<p>while (1) {<br>
+        // LED 心跳<br>
+        // 检查 RX FIFO<br>
+        if (LCPU_RD_EMPTY()) continue;</p>
+
+<p>// 读包 → 解析 → 分发 → 回复<br>
+        LCPU_RD_START_PACKET();<br>
+        uint32 len = LCPU_RD_PKT_LEN();</p>
+
+<p>uint16 ptype = eth_proc();     // 以太网层<br>
+        if (ptype == ARP_PROC) {<br>
+            arp_reply();               // ARP 层<br>
+        } else if (ptype == IP_PROC) {<br>
+            uint16 iptype = ip_proc(); // IP 层<br>
+            if (iptype == ICMP_PROC) {<br>
+                icmp_reply();          // ICMP 层<br>
+            } else if (iptype == TCP_PROC) {<br>
+                tcp_proc();            // TCP 层（待实现）<br>
+            }<br>
+        }<br>
+    }<br>
+}</p>
+
+<p>// 3. main() 只是入口<br>
+int main() {<br>
+    program_main();<br>
+    return 0;<br>
+}</p>
+
+</code></pre>
+
+<h4 id="三个层级的关系">三个层级的关系</h4>
+
+<pre><code>
+上电
+  ↓
+reset_entry()     ← 硬件复位向量，汇编级初始化 (栈/BSS)
+  ↓
+main()            ← C 标准入口
+  ↓
+program_main()    ← 实际业务主循环 (while(1) 永不退出)
+
+</code></pre>
+
+<a href="#c-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="c-compare"></a>
+
+<h3 id="27-h-与-c-联动总结">2.7 .h 与 .c 联动总结</h3>
+
+<table class="md-table">
+<thead><tr>
+<th></th>
+<th>.h 头文件</th>
+<th>.c 源文件</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><strong>类比</strong></td>
+<td>产品说明书</td>
+<td>产品本身</td>
+</tr>
+<tr>
+<td><strong>内容</strong></td>
+<td>宏、typedef、struct、extern、函数声明</td>
+<td>#include、变量定义、函数实现</td>
+</tr>
+<tr>
+<td><strong>编译</strong></td>
+<td>不单独编译</td>
+<td>编译为 .o 目标文件</td>
+</tr>
+<tr>
+<td><strong>分配内存</strong></td>
+<td>不分配</td>
+<td>分配</td>
+</tr>
+<tr>
+<td><strong>可以被多个文件包含</strong></td>
+<td>✅</td>
+<td>❌ (会产生重复定义)</td>
+</tr>
+</tbody></table>
+
+<pre><code>
+tcp.h                           tcp.c
+┌──────────────────────┐       ┌─────────────────────────┐
+│ #ifndef _TCP_H_       │       │ #include "tcp.h"         │  ← 引入声明
+│ #define _TCP_H_       │       │ #include "lcpu_general.h"│
+│                       │       │                          │
+│ // 宏                 │       │ // 定义全局变量           │
+│ #define MAX_CONN 4    │       │ static tcp_conn_t conns[4];│
+│                       │       │                          │
+│ // 结构体             │       │ // 实现函数               │
+│ typedef struct {...}  │       │ void tcp_init(void) {    │
+│       tcp_conn_t;     │       │   // 清零连接表...        │
+│                       │       │ }                        │
+│ // 函数声明           │       │                          │
+│ void tcp_init(void);  │───→   │ uint16_t tcp_proc(void) {│
+│ uint16_t tcp_proc();  │ 实现  │   // 解析 + 状态机...     │
+│                       │       │ }                        │
+│ #endif                │       │                          │
+└──────────────────────┘       └─────────────────────────┘
+
+</code></pre>
+
+<a href="#c-top">← 返回拆解表</a>
+
+<hr>
+
+<a id="appendix"></a>
+
+<h2 id="附录C-数据类型速查">附录：C 数据类型速查</h2>
+
+<h3 id="基本类型">基本类型</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>关键字</th>
+<th>占用</th>
+<th>取值范围</th>
+<th>格式占位符</th>
+<th>项目中的用途</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>char</code></td>
+<td>1B</td>
+<td>-128 ~ 127</td>
+<td><code>%c</code> / <code>%d</code></td>
+<td>单字符</td>
+</tr>
+<tr>
+<td><code>unsigned char</code> / <code>uint8</code></td>
+<td>1B</td>
+<td>0 ~ 255</td>
+<td><code>%u</code></td>
+<td>状态值、标志位、字节数据</td>
+</tr>
+<tr>
+<td><code>short</code></td>
+<td>2B</td>
+<td>-32768 ~ 32767</td>
+<td><code>%hd</code></td>
+<td>小整数</td>
+</tr>
+<tr>
+<td><code>unsigned short</code> / <code>uint16</code></td>
+<td>2B</td>
+<td>0 ~ 65535</td>
+<td><code>%hu</code></td>
+<td>端口号、包长度</td>
+</tr>
+<tr>
+<td><code>int</code></td>
+<td>4B</td>
+<td>-21亿 ~ 21亿</td>
+<td><code>%d</code></td>
+<td>普通整数</td>
+</tr>
+<tr>
+<td><code>unsigned int</code> / <code>uint32</code></td>
+<td>4B</td>
+<td>0 ~ 42亿</td>
+<td><code>%u</code></td>
+<td>IP 地址、SEQ/ACK 序号、计数器</td>
+</tr>
+<tr>
+<td><code>long long</code></td>
+<td>8B</td>
+<td>±9×10¹⁸</td>
+<td><code>%lld</code></td>
+<td>大整数</td>
+</tr>
+<tr>
+<td><code>float</code></td>
+<td>4B</td>
+<td>6-7 位精度</td>
+<td><code>%f</code></td>
+<td>低精度小数</td>
+</tr>
+<tr>
+<td><code>double</code></td>
+<td>8B</td>
+<td>15-17 位精度</td>
+<td><code>%lf</code></td>
+<td>高精度小数（首选）</td>
+</tr>
+</tbody></table>
+
+<h3 id="项目中的类型选择">项目中的类型选择</h3>
+
+<table class="md-table">
+<thead><tr>
+<th>数据</th>
+<th>选型</th>
+<th>原因</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>IP 地址</td>
+<td><code>uint32</code></td>
+<td>恰好 4 字节</td>
+</tr>
+<tr>
+<td>MAC 地址</td>
+<td><code>uint32</code> + <code>uint16</code></td>
+<td>6 字节拆为 4+2</td>
+</tr>
+<tr>
+<td>端口号</td>
+<td><code>uint16</code></td>
+<td>0~65535</td>
+</tr>
+<tr>
+<td>TCP SEQ/ACK</td>
+<td><code>uint32</code></td>
+<td>32 位序号</td>
+</tr>
+<tr>
+<td>包长度</td>
+<td><code>uint16</code></td>
+<td>最大 65535</td>
+</tr>
+<tr>
+<td>连接状态</td>
+<td><code>uint8</code></td>
+<td>几个状态值</td>
+</tr>
+<tr>
+<td>Flags</td>
+<td><code>uint8</code></td>
+<td>6 个 bit</td>
+</tr>
+<tr>
+<td>超时计数</td>
+<td><code>uint32</code></td>
+<td>rdcycle 值</td>
+</tr>
+</tbody></table>
+
+<h3 id="char-的特殊性">char 的特殊性</h3>
+
+<pre><code class="language-c">
+char c = 'A';        // 'A' 的 ASCII 码值是 65
+printf("%c\n", c);   // 输出: A    (按字符打印)
+printf("%d\n", c);   // 输出: 65   (按数字打印)
+char next = c + 1;   // 65 + 1 = 66 → 'B'
+
+</code></pre>
+
+<hr>
+
+<p>> 更新日期: 2026-08-05 | 项目: RISC-V WebSoC</p>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/wavedrom@3/wavedrom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/wavedrom@3/skins/default.js"></script>
+<script>
+(function() {
+    // ── Mermaid ──
+    mermaid.initialize({
+        startOnLoad: false,
+        theme: 'default',
+        securityLevel: 'loose',
+        flowchart: { useMaxWidth: true, htmlLabels: true },
+        sequence: { useMaxWidth: true, boxMargin: 8, mirrorActors: false },
+        block: { useMaxWidth: true }
+    });
+    mermaid.run({
+        querySelector: '.mermaid'
+    }).then(function() {
+        console.log('Mermaid: ' + document.querySelectorAll('.mermaid').length + ' diagrams rendered');
+    }).catch(function(err) {
+        console.error('Mermaid render error:', err);
+    });
+
+    // ── Wavedrom ──
+    function renderWavedrom() {
+        WaveDrom.ProcessAll();
+        console.log('WaveDrom: timing diagrams rendered');
+    }
+    if (document.readyState === 'complete') {
+        renderWavedrom();
+    } else {
+        window.addEventListener('load', renderWavedrom);
+    }
+})();
+</script>
+</body>
+</html>

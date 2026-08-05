@@ -1,0 +1,54 @@
+[timestart] 0
+[size] 1920 1080
+[pos] 0 0
+
+[tree 0]
+-label tb_fast
+-children
+  [tree 1]
+  -label dut
+  -children
+    [tree 2]
+    -label led_o[3:0]
+    -children
+      [wire 3]
+      tb_fast.dut.led_o[3]
+      tb_fast.dut.led_o[2]
+      tb_fast.dut.led_o[1]
+      tb_fast.dut.led_o[0]
+
+[tree 0]
+-label tb_fast
+-children
+  [tree 4]
+  -label cpu_rd_empty
+  -children
+    [wire 5]
+    tb_fast.dut.cpu_rd_empty
+
+[tree 0]
+-label tb_fast
+-children
+  [tree 6]
+  -label cpu_wr_wpkt_push
+  -children
+    [wire 7]
+    tb_fast.dut.cpu_wr_wpkt_push
+
+[tree 0]
+-label tb_fast
+-children
+  [tree 8]
+  -label gmii_rx_dv
+  -children
+    [wire 9]
+    tb_fast.dut.gmii_rx_dv
+
+[tree 0]
+-label tb_fast
+-children
+  [tree 10]
+  -label mac_rx_sop
+  -children
+    [wire 11]
+    tb_fast.dut.mac_rx_sop

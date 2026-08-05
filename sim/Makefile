@@ -58,7 +58,7 @@ VCD  = tb.vcd
 
 # iverilog 选项: -g2012 支持 SystemVerilog
 IVL  = iverilog
-IVFLAGS = -g2012 -Wall -I$(RTL) -I$(SIM) -o $(VVP)
+IVFLAGS = -g2012 -Wall -DIVL_SIM -I$(RTL) -I$(SIM) -o $(VVP)
 
 all: $(VVP)
 
