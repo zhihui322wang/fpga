@@ -2,8 +2,8 @@
 // 上电后通过 LCPU JTAG 总线将固件写入指令 RAM, 然后释放 RISC-V 复位
 
 module lcpu_bfm #(
-    parameter read_time_out = 2000,
-    parameter delay_time    = 1000
+    parameter read_time_out = 50,
+    parameter delay_time    = 100
 ) (
     input  clk,
     input  reset_l,

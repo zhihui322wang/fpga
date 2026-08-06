@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>开发日报_20260806</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+       max-width: 900px; margin: 40px auto; padding: 0 20px; line-height: 1.6;
+       color: #24292e; background: #fff; }
+h1 { border-bottom: 2px solid #1a73e8; padding-bottom: 8px; color: #1a73e8; }
+h2 { border-bottom: 1px solid #e1e4e8; padding-bottom: 6px; margin-top: 32px; }
+h3 { margin-top: 24px; color: #444; }
+table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 14px; }
+th, td { border: 1px solid #dfe2e5; padding: 8px 12px; text-align: left; }
+th { background: #f5f7fa; font-weight: 600; }
+tr:nth-child(even) { background: #fafbfc; }
+code { background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-size: 13px; }
+pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto;
+      border: 1px solid #e1e4e8; font-size: 13px; line-height: 1.45; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #1a73e8; margin: 0; padding: 0 16px; color: #6a737d; }
+hr { border: 0; border-top: 1px solid #e1e4e8; margin: 24px 0; }
+ul, ol { padding-left: 24px; }
+</style>
+</head>
+<body>
+<h1>RISC-V WebSoC 开发日报</h1>
+<blockquote>项目: RISC-V WebSoC (PicoRV32 + XC7A35T + RTL8211F)</blockquote>
+<blockquote>日期: 2026-08-06</blockquote>
+<blockquote>状态: TCP SYN→SYN+ACK 仿真通过 ✅ | ILA 标准模式集成 ✅ | Web GUI 可用 ✅</blockquote>
+<hr>
+<h2>任务 1: ILA BURST_PTR 数据回读修复</h2>
+<p><strong>进展和结果:</strong></p>
+<p>修复了 ILA force trigger 回读时 4096 个样本全部相同的 Bug。根因是 <code>soft_ila_top_fcapz</code> 的读地址计算中 <code>data_sample = data_byte_off / (WORDS*4)</code> 整数除法截断，改为扁平偏移编址后正常。</p>
+<p><strong>遇到的问题:</strong></p>
+<p>ILA wrapper 的 <code>bram_rd_addr</code> 是为 JTAG 突发读设计的，逐字读时 data_byte_off 始终在 0~11 范围变化，整数除法截断导致始终读同一 BRAM 行。</p>
+<p><strong>解决方法:</strong></p>
+<p>使用 <code>FCAPZ_DATA_BASE + i * 20 + word_offset</code> 扁平偏移，将样本索引直接编码到地址中。</p>
+<hr>
+<h2>任务 2: 硬件触发调试 — TRIG_MASK 默认值问题</h2>
+<p><strong>进展和结果:</strong></p>
+<p>TRIG_MASK 寄存器上电默认值 = 全 1。testbench 只写了 word0 (bits 31:0)，word1/2 保持全 1。EQ 比较时高位总线信号非零 → 整个比较失败。显式清零所有 TRIG_MASK word 后硬件触发正常。</p>
+<p><strong>解决方法:</strong></p>
+<pre><code>
+ila_write(FCAPZ_TRIG_MASK,     32'h0004_0000);   // word0
+ila_write(FCAPZ_TRIG_MASK + 1, 32'h0);           // word1
+ila_write(FCAPZ_TRIG_MASK + 2, 32'h0);           // word2
+ila_write(FCAPZ_TRIG_MASK + 3, 32'h0);           // word3
+ila_write(FCAPZ_TRIG_MASK_EXT,  32'h0);           // word4 (EXT 地址)
+</code></pre>
+<hr>
+<h2>任务 3: TCP SYN 帧注入 → SYN+ACK 验证</h2>
+<p><strong>进展和结果:</strong></p>
+<p>在 testbench 中构造完整 TCP SYN 帧 (Ethernet + IP + TCP 含正确校验和)，通过 GMII 注入 FPGA。固件成功处理并返回 SYN+ACK (Flags=0x12)。</p>
+<p><strong>验证通过:</strong></p>
+<ul>
+<li>TCP Flags = 0x12 (SYN|ACK) ✓</li>
+<li>源/目的 MAC、IP 正确交换 ✓</li>
+<li>FPGA ISN = 0x10000000, ACK_Num = 0x20000001 ✓</li>
+</ul>
+<hr>
+<h2>任务 4: ILA 探针全面扩展 (13 → 27 探针)</h2>
+<p><strong>进展和结果:</strong></p>
+<p>将 ILA 核 #0 从 13 探针 (96bit) 扩展到 27 探针 (151bit)，覆盖 GMII TX、MAC TX、CPU FIFO 脉冲、总线写数据、LED 等全部关键信号。</p>
+<p><strong>新增 14 个探针:</strong></p>
+<p>gmii_tx_er, mac_tx_sop/en/data/eop/err, cpu_rd_empty, cpu_wr_full,</p>
+<p>cpu_rd_rpkt_pop_ind, cpu_wr_wpkt_push_ind, cpu_wr_wen_ind, cpu_rd_ren,</p>
+<p>bus_wdata (32bit), led_val (4bit)</p>
+<hr>
+<h2>任务 5: 修复仿真 VCD 生成 — 内嵌 testbench 冲突</h2>
+<p><strong>进展和结果:</strong></p>
+<p>仿真通过但主 tb_fast.vcd 不生成。根因是 RTL 模块内嵌的 testbench module 被 iverilog 当作额外顶层运行，其 <code>$dumpvars</code> 先于主 TB 的 <code>$dumpfile</code> 执行 → 主 VCD 被阻止。</p>
+<p><strong>解决方法:</strong></p>
+<p>在 7 个含内嵌 testbench 的 RTL 文件中，用 <code>ifndef IVL_SIM</code> / <code>endif</code> 包裹内嵌 TB module。修改后 tb_fast.vcd 正常生成。</p>
+<p><strong>修改的文件:</strong></p>
+<p><code>dual_clock_simple_dual_port_ram.v</code>, <code>package_fifo_v2.v</code>, <code>gmii2mac.v</code>, <code>riscv32_top.v</code>, <code>uart.v</code>, <code>single_clock_true_dual_port_ram.v</code>, <code>single_clock_simple_dual_port_ram.v</code></p>
+<hr>
+<h2>任务 6: ILA 标准模式重构</h2>
+<p><strong>进展和结果:</strong></p>
+<p>将项目 ILA 集成从自定义模式 (sim_mod mux + 专用仿真端口) 重构为标准模式，严格遵循 fpga_ila 快速入门指南的三要素结构。仿真验证通过。</p>
+<p><strong>修改的文件:</strong></p>
+<p><code>rtl/webserver_cpu_top.v</code>, <code>sim/tb_fast.v</code></p>
+<p><strong>标准模式结构:</strong></p>
+<pre><code>
+// ① 核总线 (多核共用 addr/wdata, 每核独立 we/re/rdata)
+localparam ILA_NUM_CORES    = 1;
+wire [ILA_NUM_CORES-1:0]     ila_we;
+wire [ILA_NUM_CORES-1:0]     ila_re;
+wire [15:0]                  ila_addr;
+wire [31:0]                  ila_wdata;
+wire [ILA_NUM_CORES*32-1:0]  ila_rdata;
+
+// ② ILA 核 — 直连总线
+soft_ila_top_fcapz #(...) u_ila_core0 (
+    .reg_we        (ila_we[0]),
+    .reg_re        (ila_re[0]),
+    .reg_addr      (ila_addr),
+    .reg_wdata     (ila_wdata),
+    .reg_rdata     (ila_rdata[0*32 +: 32])
+);
+
+// ③ ILA Hub — 直连总线
+ila_hub_top #(...) u_ila_debug (
+    .core_reg_we    (ila_we),
+    .core_reg_re    (ila_re),
+    .core_reg_addr  (ila_addr),
+    .core_reg_wdata (ila_wdata),
+    .core_reg_rdata (ila_rdata)
+);
+</code></pre>
+<h2>任务 7: fpga_ila Web GUI 环境搭建</h2>
+<p><strong>进展和结果:</strong></p>
+<p>在 fpga_ila 安装目录创建 Python venv，安装全部依赖。Web 版已验证启动成功 (localhost:9527)，加载 signals.json 后可看到 27 个命名探针。</p>
+<p><strong>启动方式:</strong></p>
+<pre><code>
+cd /home/zhihuiw/fpga_work/Prj/RiscV_WebSoC_3
+./ila_gui.sh web        # Web 版 (http://localhost:9527)
+./ila_gui.sh            # Qt GUI 版
+</code></pre>
+<hr>
+<h2>ILA 标准模式使用问题总结</h2>
+<h3>问题 1: 标准指南省略了 `reg_re` / `core_reg_re` 端口</h3>
+<p>快速入门指南的示例代码只显示了 <code>.reg_we</code> / <code>.core_reg_we</code>，没有 <code>.reg_re</code> / <code>.core_reg_re</code>。但实际 RTL 中这两个端口是 <code>input</code>/<code>output</code> 声明，无默认值，<strong>不连接会编译报错</strong>。</p>
+<p><strong>解决:</strong> 标准模式也必须连接 <code>reg_re</code> 和 <code>core_reg_re</code>:</p>
+<pre><code>
+soft_ila_top_fcapz:  .reg_re(ila_re[0])
+ila_hub_top:         .core_reg_re(ila_re)
+</code></pre>
+<h3>问题 2: Web GUI 加载 signals.json 无反应</h3>
+<p>Web GUI 的 <code>_loadSignals()</code> 函数只拷贝 <code>name</code>/<code>probes</code> 字段，漏掉 <code>data_depth</code>/<code>num_probes</code>。后续 <code>_populateCoreSelect()</code> 用 <code>(c.data_depth || 0) > 0</code> 过滤死核，导致刚加载的核被当作死核丢弃，页面静默无反应。</p>
+<p><strong>解决:</strong> 修改 <code>index.html</code> 的 <code>_loadSignals()</code>，完整拷贝 <code>data_depth</code>、<code>num_probes</code>、<code>total_width</code>、<code>max_windows</code> 等字段。</p>
+<h3>问题 3: Web GUI 默认波特率 115200 vs FPGA 921600</h3>
+<p>Web GUI 连接对话框默认波特率 115200，但标准模式下 <code>ILA_BAUD = 921600</code>。不匹配导致连接超时。</p>
+<p><strong>解决:</strong> 连接时手动改波特率为 921600，或修改 HTML 中默认值。</p>
+<h3>问题 4: 仿真中 testbench 如何访问 ILA 寄存器</h3>
+<p>标准模式下 Hub 直接驱动核总线，没有仿真 bypass 路径。testbench 需要通过 <code>force</code> 语句覆盖总线信号:</p>
+<pre><code>
+task ila_write(input [15:0] addr, input [31:0] data);
+    @(posedge ila_clk);
+    force dut.ila_we   = 1'b1;
+    force dut.ila_addr = addr;
+    force dut.ila_wdata = data;
+    @(posedge ila_clk);
+    force dut.ila_we   = 1'b0;
+endtask
+</code></pre>
+<h3>问题 5: 上板前必须确认 FPGA 已烧录</h3>
+<p>Web GUI 通过 UART 发送 fcapz 协议命令，需要 FPGA 上的 ILA Hub 响应。如果 FPGA 未烧录 bitstream，串口能打开但 Hub 不响应 → 连接超时。</p>
+<hr>
+<h2>仿真运行</h2>
+<pre><code>
+cd sim
+make clean && make      # 编译
+make run                # 仿真 → tb_fast.vcd
+make wave               # gtkwave 看完整波形
+</code></pre>
+<h2>硬件调试</h2>
+<pre><code>
+./ila_gui.sh web        # Web 版 (http://localhost:9527)
+./ila_gui.sh            # Qt GUI 版
+</code></pre>
+<blockquote>⚠️ 硬件调试前提: FPGA 已烧录 bitstream + UART 连接 + 波特率设为 921600</blockquote>
+<hr>
+<blockquote>更新日期: 2026-08-06</blockquote>
+</body>
+</html>

@@ -74,8 +74,8 @@ module lcpu_riscv_wrapper #(
       );
     end else begin : lcpu_sim
       lcpu_bfm #(
-          .read_time_out(2000),
-          .delay_time   (1000)
+          .read_time_out(50),
+          .delay_time   (100)
       ) u_lcpu_bfm (
           .clk    (clk),
           .reset_l(reset_l),

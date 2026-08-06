@@ -49,6 +49,7 @@ endmodule
 
 // ── IDDR ──
 // 双沿采样: posedge 捕获到 Q1, negedge 捕获到 Q2
+// DDR_CLK_EDGE="SAME_EDGE_PIPELINED": Q1/Q2 同时在下个 posedge 输出
 module IDDR #(
     parameter DDR_CLK_EDGE = "SAME_EDGE",
     parameter INIT_Q1 = 1'b0,
@@ -63,9 +64,20 @@ module IDDR #(
     output Q1,
     output Q2
 );
+    // SAME_EDGE_PIPELINED: 内部采样 + 流水线输出
+    reg q1_int, q2_int;
     reg q1_r, q2_r;
-    always @(posedge C) q1_r <= D;
-    always @(negedge C) q2_r <= D;
+
+    // 采样阶段: posedge 捕获 Q1 候选, negedge 捕获 Q2 候选
+    always @(posedge C) q1_int <= D;
+    always @(negedge C) q2_int <= D;
+
+    // 输出阶段: 下个 posedge 同时更新 Q1/Q2 (PIPELINED)
+    always @(posedge C) begin
+        q1_r <= q1_int;
+        q2_r <= q2_int;
+    end
+
     assign Q1 = q1_r;
     assign Q2 = q2_r;
 endmodule
@@ -142,8 +154,13 @@ module xpm_memory_tdpram #(
     localparam DEPTH = (MEMORY_SIZE + READ_DATA_WIDTH_A - 1) / READ_DATA_WIDTH_A;
     reg [READ_DATA_WIDTH_A-1:0] douta_r, doutb_r;
 
-    // 简单行为模型: 直接在 reg 数组上读/写
+    // 简单行为模型: 直接在 reg 数组上读/写 (初始化为 0, 避免 X 传播)
     reg [READ_DATA_WIDTH_A-1:0] mem [0:DEPTH-1];
+    integer init_i;
+    initial begin
+        for (init_i = 0; init_i < DEPTH; init_i = init_i + 1)
+            mem[init_i] = {READ_DATA_WIDTH_A{1'b0}};
+    end
 
     always @(posedge clka) if (ena) begin
         if (wea != 0) mem[addra] <= dina;

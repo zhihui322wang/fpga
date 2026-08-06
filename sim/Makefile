@@ -1,8 +1,13 @@
-# Makefile — iverilog 仿真
+# Makefile — iverilog 仿真 (+ fpga_ila)
 RTL = ../rtl
 SIM = .
 
-# 所有 RTL 源文件
+# fpga_ila 安装路径
+ILA_HOME ?= /home/zhihuiw/fpga_work/fpga_ila_local
+ILA_RTL = $(ILA_HOME)/rtl
+ILA_FCAPZ = $(ILA_RTL)/fcapz
+
+# 所有 RTL 源文件 (项目)
 RTL_SRCS = $(RTL)/webserver_cpu_top.v      \
            $(RTL)/define.sv                 \
            $(RTL)/rgmii_gmii_bridge.v       \
@@ -46,25 +51,44 @@ RTL_SRCS = $(RTL)/webserver_cpu_top.v      \
            $(RTL)/clock_frequency_divider.v  \
            $(RTL)/pulse_clock_region_pass.v
 
+# fpga_ila RTL 源文件 (公共 + fcapz + UART)
+ILA_SRCS = $(ILA_RTL)/soft_ila_top_fcapz.v    \
+           $(ILA_RTL)/ila_hub_top.v           \
+           $(ILA_RTL)/ila_hub.v               \
+           $(ILA_RTL)/ila_transport_mux.v      \
+           $(ILA_RTL)/reg_bus_bridge.v         \
+           $(ILA_RTL)/ila_sync_fifo.v          \
+           $(ILA_RTL)/uart_backend.v           \
+           $(ILA_RTL)/uart_rx_ila.v            \
+           $(ILA_RTL)/uart_tx_ila.v            \
+           $(ILA_FCAPZ)/fcapz_ela.v            \
+           $(ILA_FCAPZ)/trig_compare.v         \
+           $(ILA_FCAPZ)/dpram.v                \
+           $(ILA_FCAPZ)/fcapz_core_manager.v   \
+           $(ILA_FCAPZ)/fcapz_async_fifo.v     \
+           $(ILA_FCAPZ)/reset_sync.v           \
+           $(ILA_FCAPZ)/dff_sync.v             \
+           $(ILA_FCAPZ)/dff_reg_sync.v
+
 # 仿真辅助文件
 SIM_SRCS = $(SIM)/vendor_stubs.v    \
            $(SIM)/xilinx_stubs.v     \
            $(SIM)/lcpu_bfm.v         \
-           $(SIM)/tb.v
+           $(SIM)/tb_fast.v
 
 # 输出
 VVP  = sim.vvp
-VCD  = tb.vcd
+VCD  = tb_fast.vcd
 
 # iverilog 选项: -g2012 支持 SystemVerilog
 IVL  = iverilog
-IVFLAGS = -g2012 -Wall -DIVL_SIM -I$(RTL) -I$(SIM) -o $(VVP)
+IVFLAGS = -g2012 -Wall -DIVL_SIM -I$(RTL) -I$(SIM) -I$(ILA_RTL) -I$(ILA_FCAPZ) -o $(VVP)
 
 all: $(VVP)
 
-$(VVP): $(RTL_SRCS) $(SIM_SRCS)
-	@echo "=== Compiling with iverilog ==="
-	$(IVL) $(IVFLAGS) $(SIM_SRCS) $(RTL_SRCS)
+$(VVP): $(RTL_SRCS) $(ILA_SRCS) $(SIM_SRCS)
+	@echo "=== Compiling with iverilog (+ fpga_ila) ==="
+	$(IVL) $(IVFLAGS) $(SIM_SRCS) $(ILA_SRCS) $(RTL_SRCS)
 	@echo "=== Done: $(VVP) ==="
 
 # 从 TCL 生成 firmware.hex
@@ -78,10 +102,18 @@ run: $(VVP) $(FW_HEX)
 	@echo "=== Running simulation ==="
 	vvp $(VVP)
 
+ila_vcd: run
+	@echo "=== Converting ILA dump to VCD ==="
+	python3 $(SIM)/ila_dump_to_vcd.py ila_dump.txt ila_wave.vcd
+	@echo "=== Done: ila_wave.vcd ==="
+
 wave: run
 	gtkwave $(VCD) &
 
-clean:
-	rm -f $(VVP) $(VCD) firmware.hex
+wave_ila: ila_vcd
+	gtkwave ila_wave.vcd &
 
-.PHONY: all run wave clean
+clean:
+	rm -f $(VVP) $(VCD) firmware.hex ila_dump.txt ila_wave.vcd
+
+.PHONY: all run wave wave_ila ila_vcd clean

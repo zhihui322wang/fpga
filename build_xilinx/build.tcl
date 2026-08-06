@@ -10,6 +10,14 @@ foreach f [lsort [glob -nocomplain ${rtl_dir}/*.v ${rtl_dir}/*.sv]] {
     add_files -norecurse $f
 }
 puts "\[OK\] Added [llength [glob -nocomplain ${rtl_dir}/*.v ${rtl_dir}/*.sv]] RTL files"
+
+# fpga_ila RTL 文件 (软逻辑分析仪)
+set ila_home /home/zhihuiw/fpga_work/fpga_ila_local
+foreach f [glob -nocomplain ${ila_home}/rtl/*.v ${ila_home}/rtl/*.vh ${ila_home}/rtl/fcapz/*.v ${ila_home}/rtl/fcapz/*.vh] {
+    add_files -norecurse $f
+}
+puts "\[OK\] Added fpga_ila RTL files from ${ila_home}"
+
 set_property FILE_TYPE SYSTEMVERILOG [get_files -filter {FILE_TYPE == Verilog}]
 set_property top webserver_cpu_top [current_fileset]
 update_compile_order -fileset sources_1

@@ -37,12 +37,13 @@ void program_main() {
 #endif
     LCPU_SET_LED(0x00);
 
+    // 1. 初始化 TCP 连接表 (任务 7a)
     tcp_init();
 
     uint32 led_val = 0x01;
 
     while (1) {
-        // LED 心跳
+        /* LED 心跳 */
         {
             static uint32 last_toggle = 0;
             uint32 now = LCPU_LOCAL_TIME_L();
@@ -53,6 +54,10 @@ void program_main() {
             }
         }
 
+        /* 2. TCP 超时重传轮询 (任务 13) */
+        tcp_timer_check();
+
+        /* 3. RX FIFO 判空 */
         if (LCPU_RD_EMPTY())
             continue;
 
@@ -63,6 +68,7 @@ void program_main() {
             continue;
         }
 
+        /* 4. 协议栈网络分发 */
         uint16 ptype = eth_proc();
 
         if (ptype == ARP_PROC) {
@@ -72,10 +78,16 @@ void program_main() {
             if (iptype == ICMP_PROC) {
                 icmp_reply();
             } else if (iptype == TCP_PROC) {
-                tcp_proc();
+                // 执行 TCP 状态机 (任务 9~12)
+                uint16 app_type = tcp_proc();
+                
+                if (app_type == HTTP_PROC) {
+                    // 任务 11: 收到 HTTP 数据，后续对接 http_proc() 模块
+                    // http_proc();
+                }
             }
         }
 
-        _RD(1) = 1;
+        _RD(1) = 1; // 释放数据包内存
     }
 }

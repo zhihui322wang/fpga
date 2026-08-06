@@ -321,6 +321,7 @@ module ERROR__addr_width_must_be_gte_alloc_addr_bits__dual_clock_simple_dpram ()
 endmodule
 
 // synthesis translate_off
+`ifndef IVL_SIM  // 项目仿真时禁用内嵌TB, 避免与主TB冲突
 `timescale 1ns / 1ps
 
 module tb_dual_clock_simple_dual_port_ram;
@@ -413,4 +414,5 @@ module tb_dual_clock_simple_dual_port_ram;
     // // $finish; (stripped) (stripped for sim)
   end
 endmodule
+`endif  // IVL_SIM
 // synthesis translate_on
