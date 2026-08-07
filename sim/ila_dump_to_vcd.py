@@ -11,21 +11,35 @@
 import sys
 import os
 
-# ── 探针定义 (与 signals.json / webserver_cpu_top.v 保持一致) ──
+# ── 探针定义 (与 signals.json / webserver_cpu_top.v 保持一致, 27 probes / 151 bits) ──
 PROBES = [
-    {"name": "gmii_rx_dv",    "width": 1,  "bit_lo": 0},
-    {"name": "gmii_rxd",      "width": 8,  "bit_lo": 1},
-    {"name": "gmii_tx_en",    "width": 1,  "bit_lo": 9},
-    {"name": "gmii_txd",      "width": 8,  "bit_lo": 10},
-    {"name": "mac_rx_sop",    "width": 1,  "bit_lo": 18},
-    {"name": "mac_rx_en",     "width": 1,  "bit_lo": 19},
-    {"name": "mac_rx_data",   "width": 8,  "bit_lo": 20},
-    {"name": "mac_rx_eop",    "width": 1,  "bit_lo": 28},
-    {"name": "bus_req",       "width": 1,  "bit_lo": 29},
-    {"name": "bus_rhwl",      "width": 1,  "bit_lo": 30},
-    {"name": "bus_address",   "width": 32, "bit_lo": 31},
-    {"name": "bus_rdata",     "width": 32, "bit_lo": 63},
-    {"name": "bus_ack",       "width": 1,  "bit_lo": 95},
+    {"name": "gmii_rx_dv",           "width": 1,  "bit_lo": 0},
+    {"name": "gmii_rxd",             "width": 8,  "bit_lo": 1},
+    {"name": "gmii_tx_en",           "width": 1,  "bit_lo": 9},
+    {"name": "gmii_txd",             "width": 8,  "bit_lo": 10},
+    {"name": "mac_rx_sop",           "width": 1,  "bit_lo": 18},
+    {"name": "mac_rx_en",            "width": 1,  "bit_lo": 19},
+    {"name": "mac_rx_data",          "width": 8,  "bit_lo": 20},
+    {"name": "mac_rx_eop",           "width": 1,  "bit_lo": 28},
+    {"name": "bus_req",              "width": 1,  "bit_lo": 29},
+    {"name": "bus_rhwl",             "width": 1,  "bit_lo": 30},
+    {"name": "bus_address",          "width": 32, "bit_lo": 31},
+    {"name": "bus_rdata",            "width": 32, "bit_lo": 63},
+    {"name": "bus_ack",              "width": 1,  "bit_lo": 95},
+    {"name": "gmii_tx_er",           "width": 1,  "bit_lo": 96},
+    {"name": "mac_tx_sop",           "width": 1,  "bit_lo": 97},
+    {"name": "mac_tx_en",            "width": 1,  "bit_lo": 98},
+    {"name": "mac_tx_data",          "width": 8,  "bit_lo": 99},
+    {"name": "mac_tx_eop",           "width": 1,  "bit_lo": 107},
+    {"name": "mac_tx_err",           "width": 1,  "bit_lo": 108},
+    {"name": "cpu_rd_empty",         "width": 1,  "bit_lo": 109},
+    {"name": "cpu_wr_full",          "width": 1,  "bit_lo": 110},
+    {"name": "cpu_rd_rpkt_pop_ind",  "width": 1,  "bit_lo": 111},
+    {"name": "cpu_wr_wpkt_push_ind", "width": 1,  "bit_lo": 112},
+    {"name": "cpu_wr_wen_ind",       "width": 1,  "bit_lo": 113},
+    {"name": "cpu_rd_ren",           "width": 1,  "bit_lo": 114},
+    {"name": "bus_wdata",            "width": 32, "bit_lo": 115},
+    {"name": "led_val",              "width": 4,  "bit_lo": 147},
 ]
 
 # VCD 标识符: 每个信号一个唯一短标识符 (用于 VCD 值变化)
@@ -44,7 +58,7 @@ def make_vcd_id(idx):
 
 
 def extract_probe(sample_int, bit_lo, width):
-    """从 96-bit 样本中提取指定探针的值"""
+    """从 151-bit 样本中提取指定探针的值"""
     mask = (1 << width) - 1
     return (sample_int >> bit_lo) & mask
 
@@ -169,8 +183,9 @@ def main():
         print("\n--- First 5 samples preview ---")
         for i in range(min(5, len(samples))):
             s = samples[i]
-            print(f"  [{i}] gmii_rxd=0x{(s>>1)&0xFF:02x} mac_rx_data=0x{(s>>20)&0xFF:02x} "
-                  f"bus_addr=0x{(s>>31)&0xFFFFFFFF:08x}")
+            print(f"  [{i}] gmii_rx_dv={(s>>0)&1} gmii_tx_en={(s>>9)&1} "
+                  f"mac_tx_data=0x{(s>>99)&0xFF:02x} mac_tx_sop={(s>>97)&1} "
+                  f"bus_addr=0x{(s>>31)&0xFFFFFFFF:08x} led={(s>>147)&0xF:x}")
 
 
 if __name__ == "__main__":

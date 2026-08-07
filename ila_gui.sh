@@ -5,9 +5,12 @@
 #       ./ila_gui.sh web        # Web 版 (浏览器)
 #       ./ila_gui.sh web 9527   # Web 版 (指定端口)
 # ============================================================================
-ILA_HOME="$(dirname "$0")/../fpga_work/ip库/fpga_ila-fcapz_ela_enhance"
+ILA_HOME="/home/zhihuiw/fpga_work/fpga_ila_local"
 VENV_PYTHON="$ILA_HOME/.venv/bin/python"
 SIGNALS_JSON="$(dirname "$0")/signals.json"
+
+# 自动复制 signals.json 到 GUI 可发现的位置
+cp "$SIGNALS_JSON" "$ILA_HOME/signals.json" 2>/dev/null
 
 cd "$ILA_HOME"
 
@@ -22,6 +25,7 @@ if [ "$1" = "web" ]; then
 else
     export QT_QPA_PLATFORM=xcb
     echo "=== fpga_ila Qt GUI ==="
+    echo "   ILA:  $ILA_HOME"
     echo "   信号: $SIGNALS_JSON"
     echo ""
     exec "$VENV_PYTHON" gui/main.py

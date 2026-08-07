@@ -373,7 +373,7 @@ module webserver_cpu_top #(
   // 7. fpga_ila 调试系统
   //============================================================================
   localparam ILA_NUM_CORES    = 1;
-  localparam ILA_CLK_HZ       = 125_000_000;
+  localparam ILA_CLK_HZ       = 50_000_000;   // 50MHz (降频解决 ILA BRAM 时序违规)
   localparam ILA_BAUD         = 921600;
   localparam ILA_REG_HOLD     = 6;
 
@@ -393,7 +393,7 @@ module webserver_cpu_top #(
       .CORE_EN        (1),
       .DATA_DEPTH     (2048),
       .MAX_WINDOWS    (1),
-      .SAMPLE_HZ      (125000000),
+      .SAMPLE_HZ      (50000000),
       .RST_ACTIVE_LOW (1),
       .NUM_PROBES     (27),
       .PROBE0_WIDTH   (1),     // gmii_rx_dv
@@ -425,7 +425,7 @@ module webserver_cpu_top #(
       .PROBE26_WIDTH  (4),     // led_val
       .EXT_TRIG_EN    (1)
   ) u_ila_core0 (
-      .sample_clk    (clk_125m),
+      .sample_clk    (clk_50m),       // 50MHz (降频解决 ILA BRAM 时序)
       .rst_in        (sys_rst_n),
       .jtag_clk      (ila_jtag_clk),
       .probe0        (gmii_rx_dv),
@@ -474,7 +474,7 @@ module webserver_cpu_top #(
       .REG_HOLD       (ILA_REG_HOLD),
       .USE_FCAPZ_CORE (1)
   ) u_ila_debug (
-      .clk            (clk_125m),
+      .clk            (clk_50m),       // 50MHz (降频解决 ILA BRAM 时序)
       .rst            (~sys_rst_n),
       .uart_rxd       (ila_uart_rxd),
       .uart_txd       (ila_uart_txd),
