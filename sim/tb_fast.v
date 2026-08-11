@@ -137,6 +137,118 @@ module tb_fast;
         $display("[%0t] >>> PicoRV32 TRAP=1 — ILLEGAL INSN OR FAULT!", $time);
     end
 
+    // ── PicoRV32 内存读取追踪 (排查 TCP DstPort 异常) ──
+    // PicoRV32 read: mem_valid=1 & mem_wstrb=0, data valid when mem_ready=1
+    wire        picorv32_mem_ready;
+    wire [31:0] picorv32_mem_rdata;
+    assign picorv32_mem_ready = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_RiscV32_LocalBus.u_picorv32.mem_ready;
+    assign picorv32_mem_rdata = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_RiscV32_LocalBus.u_picorv32.mem_rdata;
+
+    reg [31:0] pending_rd_addr;
+    reg        pending_rd;
+    always @(posedge dut.clk_50m) begin
+        // 检测读请求 (mem_valid=1, wstrb=0)
+        if (picorv32_mem_valid && picorv32_mem_wstrb == 4'b0000) begin
+            pending_rd_addr <= picorv32_mem_addr;
+            pending_rd <= 1'b1;
+        end
+        // 读数据返回 (mem_ready=1)
+        if (pending_rd && picorv32_mem_ready) begin
+            pending_rd <= 1'b0;
+            if (pending_rd_addr == 32'h1758) begin
+                $display("[%0t] MEM_RD: word@0x1758 => 0x%08x (tcp_dst=%04x tcp_src=%04x)",
+                         $time, picorv32_mem_rdata,
+                         picorv32_mem_rdata[15:0], picorv32_mem_rdata[31:16]);
+            end
+            if (pending_rd_addr == 32'h16d0) begin
+                $display("[%0t] MEM_RD: word@0x16d0 => 0x%08x (remote_port=%04x)",
+                         $time, picorv32_mem_rdata,
+                         picorv32_mem_rdata[15:0]);
+            end
+        end
+    end
+    // PicoRV32 mem_wdata 的字节通道由 wstrb 决定:
+    //   wstrb=0011 → data[15:0], wstrb=1100 → data[31:16]
+    wire [31:0] picorv32_mem_wdata;
+    wire [3:0]  picorv32_mem_wstrb;
+    assign picorv32_mem_wdata = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_RiscV32_LocalBus.u_picorv32.mem_wdata;
+    assign picorv32_mem_wstrb = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_RiscV32_LocalBus.u_picorv32.mem_wstrb;
+
+    // 辅助: 从 wdata 和 wstrb 提取实际写入的半字值
+    function [15:0] extract_wr_half(input [31:0] wdata, input [3:0] wstrb);
+        case (wstrb)
+            4'b0011: extract_wr_half = wdata[15:0];
+            4'b1100: extract_wr_half = wdata[31:16];
+            default: extract_wr_half = wdata[15:0];  // 全字写入也读低16位
+        endcase
+    endfunction
+
+    always @(posedge dut.clk_50m) begin
+        if (picorv32_mem_valid && |picorv32_mem_wstrb) begin
+            case (picorv32_mem_addr)
+                // 注意: PicoRV32 mem_addr 是 word-aligned
+                32'h1758: begin  // tcp_dst_port (0x1758) 或 tcp_src_port (0x175a)
+                    if (picorv32_mem_wstrb == 4'b1100)
+                        $display("[%0t] MEM_WR: tcp_src_port (0x175a) <= 0x%04x", $time,
+                                 picorv32_mem_wdata[31:16]);
+                    else if (picorv32_mem_wstrb == 4'b0011)
+                        $display("[%0t] MEM_WR: tcp_dst_port (0x1758) <= 0x%04x", $time,
+                                 picorv32_mem_wdata[15:0]);
+                    else
+                        $display("[%0t] MEM_WR: word@0x1758 <= 0x%08x (strobe=%b)", $time,
+                                 picorv32_mem_wdata, picorv32_mem_wstrb);
+                end
+                32'h16c8: begin  // conn_table[0] base
+                    if (picorv32_mem_wstrb == 4'b0001)
+                        $display("[%0t] MEM_WR: conn_table[0].state (0x16c8) <= 0x%02x", $time,
+                                 picorv32_mem_wdata[7:0]);
+                    else if (picorv32_mem_wstrb == 4'b0011)
+                        $display("[%0t] MEM_WR: conn_table[0].state+pad (0x16c8) <= 0x%04x", $time,
+                                 picorv32_mem_wdata[15:0]);
+                    else if (picorv32_mem_wstrb == 4'b1111)
+                        $display("[%0t] MEM_WR: conn_table[0].word0 (0x16c8) <= 0x%08x (remote_ip)", $time,
+                                 picorv32_mem_wdata);
+                    else
+                        $display("[%0t] MEM_WR: word@0x16c8 <= 0x%08x (strobe=%b)", $time,
+                                 picorv32_mem_wdata, picorv32_mem_wstrb);
+                end
+                32'h16cc: begin  // conn_table[0] remote_ip (offset 4)
+                    $display("[%0t] MEM_WR: conn_table[0].remote_ip (0x16cc) <= 0x%08x", $time,
+                             picorv32_mem_wdata);
+                end
+                32'h16d0: begin  // conn_table[0] remote_port (offset 8)
+                    $display("[%0t] MEM_WR: conn_table[0].remote_port (0x16d0) <= 0x%04x", $time,
+                             extract_wr_half(picorv32_mem_wdata, picorv32_mem_wstrb));
+                end
+            endcase
+        end
+    end
+
+    // ── SRAM Port B 监控 (排查 wren_byte_b 时序) ──
+    wire        sram_wren_b;
+    wire [3:0]  sram_wren_byte_b;
+    wire [31:0] sram_data_b;
+    wire [30:0] sram_addr_b;
+    assign sram_wren_b      = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_instru_ram.wren_b;
+    assign sram_wren_byte_b = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_instru_ram.wren_byte_b;
+    assign sram_data_b      = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_instru_ram.data_b;
+    assign sram_addr_b      = dut.u_riscv.riscv_cpu_generation.u_riscv_cpu.u_instru_ram.address_b;
+
+    reg [3:0]  prev_sram_byte_en;
+    reg        prev_sram_wren;
+    always @(posedge dut.clk_50m) begin
+        // 跟踪 byte_en 变化
+        if (sram_wren_byte_b !== prev_sram_byte_en)
+            $display("[%0t] SRAM: wren_byte_b changed %b → %b (wren_b=%b, addr=%0h, data=0x%08x)",
+                     $time, prev_sram_byte_en, sram_wren_byte_b, sram_wren_b, sram_addr_b, sram_data_b);
+        // 跟踪 wren_b 上升沿 (实际写入)
+        if (sram_wren_b && !prev_sram_wren)
+            $display("[%0t] SRAM: WRITE TRIGGERED wren_b=1 wren_byte_b=%b addr=0x%0h data=0x%08x",
+                     $time, sram_wren_byte_b, sram_addr_b, sram_data_b);
+        prev_sram_byte_en <= sram_wren_byte_b;
+        prev_sram_wren <= sram_wren_b;
+    end
+
     // ── 事件监控 ──
     reg tx_seen;
     initial tx_seen = 0;
@@ -237,6 +349,40 @@ module tb_fast;
         $display("[%0t] >>> FIRMWARE TX PUSH IND — firmware sent packet!", $time);
     end
 
+    // ── TX FIFO 写入追踪 (排查 TCP DstPort 异常) ──
+    wire [12:0] tx_wr_addr = dut.u_cpu_channel.cpu_wr_waddr;
+    wire [7:0]  tx_wr_byte = dut.u_cpu_channel.cpu_wr_wdata;
+    wire        tx_wr_wen  = dut.u_reg.cpu_wr_wen_ind;
+    always @(posedge tx_wr_wen) begin
+        $display("[%0t] TX_WR: offset=%0d (0x%04x) data=0x%02x (%3d)",
+                 $time, tx_wr_addr, tx_wr_addr, tx_wr_byte, tx_wr_byte);
+    end
+
+    // ── RX FIFO 读取追踪 (排查 TCP DstPort 异常) ──
+    // 关键: bus_rdata 在 bus_ack=1 时才有效, 不是 bus_req=1 时!
+    reg [31:0] rd_offset;
+    reg [7:0]  rd_seq;
+    reg        rd_addr_valid;
+    always @(posedge dut.clk_50m) begin
+        // LCPU_RD_SET_ADDR(offset) → bus写 word 0x6005
+        // 写数据在 bus_req 周期就已稳定
+        if (dut.bus_req && !dut.bus_rhwl && dut.bus_address == 32'h6005) begin
+            rd_offset <= dut.bus_wdata;
+            rd_seq <= 0;
+            rd_addr_valid <= 1;
+            $display("[%0t] RX_SET_ADDR: offset=%0d (0x%04x)", $time, dut.bus_wdata, dut.bus_wdata);
+        end
+        // LCPU_RD_DATA8() → bus读 word 0x6006 → rdata 在 ack 周期有效
+        if (dut.bus_ack && dut.bus_address == 32'h6006) begin
+            if (rd_addr_valid) begin
+                $display("[%0t] RX_RD_DATA: offset=%0d seq=%0d byte=0x%02x (%3d)",
+                         $time, rd_offset + rd_seq, rd_seq,
+                         dut.bus_rdata[7:0], dut.bus_rdata[7:0]);
+                rd_seq <= rd_seq + 1;
+            end
+        end
+    end
+
     // ── GMII TX 路径验证 ──
     wire       gmii_tx_en = dut.gmii_tx_en;
     wire [7:0] gmii_txd   = dut.gmii_txd;
@@ -319,6 +465,7 @@ module tb_fast;
     localparam FCAPZ_CTRL       = 16'h0004;
     localparam FCAPZ_STATUS     = 16'h0008;
     localparam FCAPZ_PRETRIG    = 16'h0014;
+    localparam FCAPZ_POSTTRIG   = 16'h0018;  // 后触发样本数
     localparam FCAPZ_CAPTURE_LEN= 16'h001C;
     localparam FCAPZ_TRIG_MODE  = 16'h0020;
     localparam FCAPZ_TRIG_VALUE = 16'h0024;
@@ -461,26 +608,32 @@ module tb_fast;
             // 等复位释放后再配置
             @(posedge reset_l);
             #10000;  // 等 10us 让 ILA 内部复位完成
-            $display("[%0t] ILA: Configuring trigger (mac_rx_sop=1)", $time);
+            $display("[%0t] ILA: Configuring trigger (mac_tx_sop=1, probe14 bit_lo=97)", $time);
 
-            // 配置触发: mac_rx_sop=1 (probe4, bit_lo=18)
+            // 配置触发: mac_tx_sop=1 (probe14, bit_lo=97 → word3 bit1)
             // TRIG_MODE: bit0=value_match (启用值匹配触发)
             ila_write(FCAPZ_TRIG_MODE, 32'd1);
 
-            // TRIG_MASK word0 = bit[18]=1 (只关心 mac_rx_sop)
-            ila_write(FCAPZ_TRIG_MASK, 32'h0004_0000);
-            // TRIG_MASK word1/2/3/4 清零 — 上电默认全1, 必须显式清零
-            ila_write(FCAPZ_TRIG_MASK + 1, 32'h0);      // word1: bits 63:32
-            ila_write(FCAPZ_TRIG_MASK + 2, 32'h0);      // word2: bits 95:64
-            ila_write(FCAPZ_TRIG_MASK + 3, 32'h0);      // word3: bits 127:96
-            ila_write(FCAPZ_TRIG_MASK_EXT,  32'h0);      // word4: bits 159:128 (EXT地址)
+            // TRIG_MASK word0/1/2 清零 — 上电默认全1, 必须显式清零
+            ila_write(FCAPZ_TRIG_MASK,      32'h0);      // word0: bits 31:0
+            ila_write(FCAPZ_TRIG_MASK + 1,  32'h0);      // word1: bits 63:32
+            ila_write(FCAPZ_TRIG_MASK + 2,  32'h0);      // word2: bits 95:64
+            // TRIG_MASK word3 = bit[1]=1 (只关心 mac_tx_sop, bit_lo=97 → word3 bit1)
+            ila_write(FCAPZ_TRIG_MASK + 3,  32'h0000_0002);
+            ila_write(FCAPZ_TRIG_MASK_EXT,  32'h0);      // word4: bits 159:128
 
-            // TRIG_VALUE word0 = bit[18]=1 (期望 mac_rx_sop=1)
-            ila_write(FCAPZ_TRIG_VALUE, 32'h0004_0000);
-            // TRIG_VALUE word1/2/3/4 保持 0 (上电默认=0, 不需改, 但保险起见可写)
+            // TRIG_VALUE word0/1/2 = 0
+            ila_write(FCAPZ_TRIG_VALUE,      32'h0);
+            ila_write(FCAPZ_TRIG_VALUE + 1,  32'h0);
+            ila_write(FCAPZ_TRIG_VALUE + 2,  32'h0);
+            // TRIG_VALUE word3 = bit[1]=1 (期望 mac_tx_sop=1)
+            ila_write(FCAPZ_TRIG_VALUE + 3,  32'h0000_0002);
 
-            // PRETRIG = 2047 (最大预触发，抓捕全过程)
-            ila_write(FCAPZ_PRETRIG, 32'd2047);
+            // PRETRIG = 512 (10.24µs 预触发 @50MHz, 捕获 CPU TX FIFO 写 + MAC TX 管道)
+            ila_write(FCAPZ_PRETRIG, 32'd512);
+
+            // POSTTRIG = 1535 → 总采集 = 512 + 1535 + 1 = 2048 samples
+            ila_write(FCAPZ_POSTTRIG, 32'd1535);
             // 读回验证
             ila_read(FCAPZ_PRETRIG);
             $display("[%0t] ILA: PRETRIG readback = %0d (expect 2047)", $time, ila_rd_val);
@@ -491,7 +644,7 @@ module tb_fast;
 
             // ARM (CTRL bit0 toggle)
             ila_write(FCAPZ_CTRL, 32'd1);
-            $display("[%0t] ILA: ARMED — waiting for mac_rx_sop trigger...", $time);
+            $display("[%0t] ILA: ARMED — waiting for mac_tx_sop trigger...", $time);
 
             // 验证 ARMED 状态
             ila_read(FCAPZ_STATUS);
@@ -528,23 +681,33 @@ module tb_fast;
         #1000; sending = 0;
         $display("[%0t] TCP SYN sent, cpu_rd_empty=%b", $time, cpu_rd_empty);
 
-        // ── ILA 回读: 立即 force trigger 捕获 (PRETRIG=2047 → 16µs 预触发) ──
-        // MAC_RX EOP 在 Frame sent 后约 0.2µs, force trigger 后预触发窗口能覆盖 ARP SOP(2.0007ms)
+        // ── ILA 回读: 等待 TX 活动完成, 检查触发状态 ──
+        // 硬件触发条件: mac_tx_sop=1, PRETRIG=512 (10.24µs 预触发)
         $display("[%0t] === ILA Readback Phase ===", $time);
+
+        // 等待固件 TX PUSH (固件写完回复包)
+        if (!tx_seen) begin
+            $display("[%0t] ILA: Waiting for firmware TX push...", $time);
+            wait(tx_seen);
+            $display("[%0t] ILA: TX push detected!", $time);
+        end
+
+        // 等 mac_tx_sop 硬件触发 (或超时后 force trigger)
+        // TX PUSH 之后约 360ns @50MHz = ~18 samples 后 mac_tx_sop 拉高
         ila_read(FCAPZ_STATUS);
-        $display("[%0t] ILA: STATUS=0x%08h (done=%b trig=%b armed=%b)",
+        $display("[%0t] ILA: STATUS after TX push = 0x%08h (done=%b trig=%b armed=%b)",
                  $time, ila_rd_val, ila_rd_val[ST_DONE_BIT], ila_rd_val[ST_TRIG_BIT], ila_rd_val[ST_ARMED_BIT]);
 
         if (!ila_rd_val[ST_DONE_BIT]) begin
-            // 等待 MAC RX EOP (后台监控已检测, 或在 ARP 发送期间到来)
-            if (!ila_eop_seen) begin
-                $display("[%0t] ILA: Waiting for mac_rx_eop...", $time);
-                wait(ila_eop_seen);
-            end
-            // EOP 刚发生, 立即 force trigger → 预触发窗口完美覆盖整个 ARP 帧
-            $display("[%0t] ILA: Force triggering immediately after EOP...", $time);
+            // 等一段时间让 mac_tx_sop 触发 (MAC TX pipeline 约数个 µs)
+            ila_wait_status_bit(ST_DONE_BIT, 100000);  // 等 100µs max
+        end
+
+        // 如果还没触发 (硬件触发可能未匹配), 用 force trigger
+        ila_read(FCAPZ_STATUS);
+        if (!ila_rd_val[ST_DONE_BIT]) begin
+            $display("[%0t] ILA: Hardware trigger missed, force triggering...", $time);
             ila_write(FCAPZ_CTRL, 32'h4);  // CTRL bit2 = FORCE
-            // 等 DONE
             ila_wait_status_bit(ST_DONE_BIT, 500000);
         end
 

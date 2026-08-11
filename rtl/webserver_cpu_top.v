@@ -159,6 +159,7 @@ module webserver_cpu_top #(
   // LCPU 总线 (lcpu_riscv_wrapper → lcpu_fpga_test)
   //============================================================================
   wire        bus_req, bus_rhwl;
+  wire [3:0]  bus_wr_byte_en;
   wire [31:0] bus_wdata, bus_address;
   wire        bus_ack;
   wire [31:0] bus_rdata;
@@ -318,6 +319,7 @@ module webserver_cpu_top #(
       // 合并总线
       .req            (bus_req),
       .rhwl           (bus_rhwl),
+      .wr_byte_en     (bus_wr_byte_en),
       .wdata          (bus_wdata),
       .address        (bus_address),
       .ack            (bus_ack),
@@ -333,6 +335,7 @@ module webserver_cpu_top #(
       // LCPU 总线
       .req                          (bus_req),
       .rhwl                         (bus_rhwl),
+      .wr_byte_en                   (bus_wr_byte_en),
       .wdata                        (bus_wdata),
       .address                      (bus_address),
       .rdata                        (bus_rdata),

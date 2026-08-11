@@ -71,7 +71,8 @@ def format_vcd_value(val, width):
 
 
 def parse_dump_file(filepath):
-    """解析 ila_dump.txt, 返回样本列表 (每个样本为 int)"""
+    """解析 ila_dump.txt, 返回样本列表 (每个样本为 int).
+    X/Z 状态位替换为 0，确保解析不中断。"""
     samples = []
     with open(filepath, "r") as f:
         for line in f:
@@ -82,7 +83,13 @@ def parse_dump_file(filepath):
             if len(parts) >= 2:
                 try:
                     sample_idx = int(parts[0])
-                    sample_val = int(parts[1], 16)
+                    hex_str = parts[1]
+                    # 将非法 hex 字符 (X/x/Z/z) 替换为 0
+                    cleaned = ''.join(
+                        c if c in '0123456789abcdefABCDEF' else '0'
+                        for c in hex_str
+                    )
+                    sample_val = int(cleaned, 16)
                     samples.append(sample_val)
                 except ValueError:
                     continue
