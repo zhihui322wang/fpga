@@ -20,6 +20,8 @@ toolchain/out_*/
 # Build outputs
 *.elf
 *.o
+*.out
+a.out
 *.bin
 *.map
 *.lst
