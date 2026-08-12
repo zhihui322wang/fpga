@@ -494,7 +494,6 @@ endmodule
 
 // synthesis translate_off
 
-`ifndef IVL_SIM
 module tb_package_fifo_v2 ();
 
   // ============================================================
@@ -1278,6 +1277,5 @@ module tb_package_fifo_v2 ();
     $dumpvars(0, tb_package_fifo_v2);
   end
 endmodule
-`endif // IVL_SIM
 
 // synthesis translate_on

@@ -146,7 +146,6 @@ endmodule
 
 // synthesis translate_off
 
-`ifndef IVL_SIM
 module tb_dual_clock_fifo ();
 
   // ============================================================
@@ -424,6 +423,5 @@ module tb_dual_clock_fifo ();
     // // $finish; (stripped) (stripped for sim)
   end
 endmodule
-`endif // IVL_SIM
 
 // synthesis translate_on

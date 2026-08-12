@@ -3,23 +3,41 @@ set proj_name "RiscV_WebSoC"
 set proj_dir  $script_dir
 set rtl_dir   [file normalize [file join $script_dir ../rtl]]
 
+# fpga_ila IP 路径 (通过 symlink 避免路径含空格)
+set fpga_ila_home "/home/zhihuiw/fpga_work/ip_copy"
+set fpga_ila_rtl  [file join $fpga_ila_home rtl]
+
 create_project -force $proj_name $proj_dir -part xc7a35tfgg484-2
 puts "\[OK\] Project created"
 
+# ---- 项目 RTL 文件 ----
 foreach f [lsort [glob -nocomplain ${rtl_dir}/*.v ${rtl_dir}/*.sv]] {
     add_files -norecurse $f
 }
-puts "\[OK\] Added [llength [glob -nocomplain ${rtl_dir}/*.v ${rtl_dir}/*.sv]] RTL files"
+puts "\[OK\] Added [llength [glob -nocomplain ${rtl_dir}/*.v ${rtl_dir}/*.sv]] project RTL files"
 
-# fpga_ila RTL 文件 (软逻辑分析仪)
-set ila_home /home/zhihuiw/fpga_work/fpga_ila_local
-foreach f [glob -nocomplain ${ila_home}/rtl/*.v ${ila_home}/rtl/*.vh ${ila_home}/rtl/fcapz/*.v ${ila_home}/rtl/fcapz/*.vh] {
-    add_files -norecurse $f
+# ---- fpga_ila RTL 文件 ----
+if {[file exists $fpga_ila_rtl]} {
+    foreach f [lsort [glob -nocomplain ${fpga_ila_rtl}/*.v]] {
+        add_files -norecurse $f
+    }
+    # .vh 头文件 (Vivado 依赖追踪)
+    foreach f [lsort [glob -nocomplain ${fpga_ila_rtl}/*.vh]] {
+        add_files -norecurse $f
+    }
+    puts "\[OK\] Added fpga_ila RTL files from $fpga_ila_rtl"
+} else {
+    puts "\[ERROR\] fpga_ila not found: $fpga_ila_rtl"
+    exit 1
 }
-puts "\[OK\] Added fpga_ila RTL files from ${ila_home}"
 
+# ---- 全局设置 ----
 set_property FILE_TYPE SYSTEMVERILOG [get_files -filter {FILE_TYPE == Verilog}]
 set_property top webserver_cpu_top [current_fileset]
+
+# Include 路径: 项目 rtl (define.sv) + fpga_ila rtl (ila_pkg.vh, crc_func.vh, ila_version.vh)
+set_property include_dirs [list $rtl_dir $fpga_ila_rtl] [current_fileset]
+
 update_compile_order -fileset sources_1
 
 add_files -fileset constrs_1 -norecurse [file join $script_dir pins.xdc]
@@ -40,5 +58,7 @@ if {[file exists $bit_src]} { file copy -force $bit_src $bit_dst; puts "Bitstrea
 open_run impl_1
 report_timing_summary -file "$proj_dir/timing_summary.rpt"
 report_utilization    -file "$proj_dir/utilization.rpt"
+# 生成 BRAM 内存映射文件 (用于 updatemem 合并固件)
+write_mem_info -force "$proj_dir/${proj_name}.mmi"
 close_design
 puts "BUILD COMPLETE"

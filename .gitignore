@@ -3,9 +3,6 @@
 Thumbs.db
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
 # Python cache
 __pycache__/
@@ -30,61 +27,22 @@ toolchain/out_*/
 
 # Simulation artifacts
 sim/work/
-sim/*.vvp
-sim/*.vcd
-sim/*.log
-sim/*.jou
-sim/*.wlf
-sim/*.tmp
-sim/transcript
-sim/*.gtkw
-sim/*.fst
-
-# Modelsim/Questa
-work/
-vsim.wlf
-transcript
-vlog.opt
-*.vstf
-modelsim.ini
-
-# Xilinx/Vivado
-par_xilinx/
-.xil/
-vivado_*.backup.jou
-vivado_*.backup.log
-.vivado/
-*.Xil/
-*.cache/
-*.gen/
-*.hw/
-*.ip_user_files/
-*.runs/
-*.sim/
-*.tmp/
-NAMEDATABASE/
-*.jou
 *.log
-*.str
-*.debug_log
-*.xpr
-*.backup.jou
-*.backup.log
-webtalk*.log
-usage_statistics_webtalk.*
+*.jou
+*.wlf
+*.tmp
+transcript
+*.gtkw
+*.fst
+*.vcd
+*.vvp
 
-# Vivado build dir (keep srcs/ and constrs_1/)
-build_xilinx/RiscV_WebSoC.cache/
-build_xilinx/RiscV_WebSoC.hw/
-build_xilinx/RiscV_WebSoC.ip_user_files/
-build_xilinx/RiscV_WebSoC.runs/
-build_xilinx/RiscV_WebSoC.sim/
-build_xilinx/vivado*.jou
-build_xilinx/vivado*.log
-build_xilinx/*.backup.jou
-build_xilinx/*.backup.log
+# ============================================================
+# FPGA 布局布线工程 — 仅提交工程文件和约束文件等必须文件
+# 工程编译中的过程文件和数据库不要去提交，忽略掉！
+# ============================================================
 
-# Quartus/Intel
+# --- Quartus/Intel FPGA ---
 par_intel/
 par/
 db/
@@ -116,5 +74,32 @@ hwcos/
 *.qsf_bak
 *.tcl~
 
-# Build outputs
-c_build/out/
+# --- Xilinx/Vivado ---
+par_xilinx/
+.xil/
+vivado_*.backup.jou
+vivado_*.backup.log
+*.cache/
+*.gen/
+*.hw/
+*.ip_user_files/
+*.runs/
+*.sim/
+*.srcs/
+NAMEDATABASE/
+*.jou
+*.log
+*.xpr
+*.xdc
+*.strategy
+*.backup.jou
+*.backup.log
+usage_statistics_webtalk.*
+
+# Vivado build artifacts to keep out
+*.bit
+*.mmi
+*.xci
+obj_dir/
+c/http.c
+c/inc/http.h

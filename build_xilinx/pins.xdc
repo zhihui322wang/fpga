@@ -8,11 +8,9 @@ set_property PACKAGE_PIN W19 [get_ports clk_50m_in]
 # 复位 (低有效)
 set_property PACKAGE_PIN D21 [get_ports reset_l]
 
-# UART (ILA 调试占用 L21/M21, CPU UART 分配到闲置 GPIO0)
-set_property PACKAGE_PIN L21 [get_ports ila_uart_rxd]
-set_property PACKAGE_PIN M21 [get_ports ila_uart_txd]
-set_property PACKAGE_PIN C18 [get_ports uart_rx]
-set_property PACKAGE_PIN C19 [get_ports uart_tx]
+# UART
+set_property PACKAGE_PIN L21 [get_ports uart_rx]
+set_property PACKAGE_PIN M21 [get_ports uart_tx]
 
 # LED
 set_property PACKAGE_PIN U22 [get_ports {led_o[0]}]
@@ -26,8 +24,6 @@ set_property PACKAGE_PIN W22 [get_ports {led_o[3]}]
 
 set_property IOSTANDARD LVCMOS33 [get_ports clk_50m_in]
 set_property IOSTANDARD LVCMOS33 [get_ports reset_l]
-set_property IOSTANDARD LVCMOS33 [get_ports ila_uart_rxd]
-set_property IOSTANDARD LVCMOS33 [get_ports ila_uart_txd]
 set_property IOSTANDARD LVCMOS33 [get_ports uart_rx]
 set_property IOSTANDARD LVCMOS33 [get_ports uart_tx]
 set_property IOSTANDARD LVCMOS33 [get_ports {led_o[0]}]

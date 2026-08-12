@@ -1,6 +1,6 @@
 #!/bin/bash
-cd /home/zhihuiw/fpga_work/RiscV_WebSoC_3/build_xilinx
-source ~/vivado/Vivado/2024.1/settings64.sh
+cd /home/haitaoz/work/FPGA_Prj/RiscV_webSoC2/build_xilinx
+source ~/Xilinx/2024.1/Vivado/2024.1/settings64.sh
 
 # Build MEM files
 python3 -c "

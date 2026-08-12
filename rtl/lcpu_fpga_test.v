@@ -45,7 +45,6 @@ module lcpu_fpga_test(
   input rst_n,
   input req,
   input rhwl,
-  input [3:0] wr_byte_en,
   input [31:0] wdata,
   input [31:0] address,
   output reg[31:0] rdata,
@@ -60,7 +59,6 @@ module lcpu_fpga_test(
   
   reg SUBBUS_program_ram_Req;
   reg SUBBUS_program_ram_RhWl;
-  reg [3:0] SUBBUS_program_ram_ByteEn;
   reg [15:0] SUBBUS_program_ram_ReqAddr;
   reg [31:0] SUBBUS_program_ram_DataWr;
   wire [31:0]program_ram_sb_rdata;
@@ -513,19 +511,17 @@ module lcpu_fpga_test(
   end
 
   always @ (posedge clk or negedge rst_n) begin 
-    if(!rst_n) begin
+    if(!rst_n) begin 
       SUBBUS_program_ram_Req <= 1'b0;
       SUBBUS_program_ram_RhWl <= 1'b1;
-      SUBBUS_program_ram_ByteEn <= 4'b0000;
       SUBBUS_program_ram_ReqAddr <= 16'b0;
       SUBBUS_program_ram_DataWr <= 32'b0;
     end
-    else begin
-      if(address >= 32'h10000 && address <= 32'h1ffff)begin
+    else begin 
+      if(address >= 32'h10000 && address <= 32'h1ffff)begin 
         SUBBUS_program_ram_Req <= req;
       end
       SUBBUS_program_ram_RhWl <= rhwl;
-      SUBBUS_program_ram_ByteEn <= wr_byte_en;
       SUBBUS_program_ram_ReqAddr <= address[15:0];
       SUBBUS_program_ram_DataWr <= wdata;
     end
@@ -558,11 +554,10 @@ module lcpu_fpga_test(
     .Ram_WrData(RAMIF_program_ram_Ram_WrData), 
     .clk(clk), 
     .rst_n(rst_n), 
-    .req(SUBBUS_program_ram_Req),
-    .rhwl(SUBBUS_program_ram_RhWl),
-    .byte_en(SUBBUS_program_ram_ByteEn),
-    .wdata(SUBBUS_program_ram_DataWr),
-    .address(SUBBUS_program_ram_ReqAddr),
+    .req(SUBBUS_program_ram_Req), 
+    .rhwl(SUBBUS_program_ram_RhWl), 
+    .wdata(SUBBUS_program_ram_DataWr), 
+    .address(SUBBUS_program_ram_ReqAddr), 
     .rdata(program_ram_sb_rdata), 
     .ack(program_ram_sb_ack) 
     ); 
