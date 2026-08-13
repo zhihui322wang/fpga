@@ -79,6 +79,7 @@ hwcos/
 # --- Xilinx/Vivado ---
 par_xilinx/
 .xil/
+*.Xil/
 vivado_*.backup.jou
 vivado_*.backup.log
 *.cache/
