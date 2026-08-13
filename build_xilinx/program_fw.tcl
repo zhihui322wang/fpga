@@ -1,0 +1,15 @@
+open_hw_manager
+connect_hw_server
+set targets [get_hw_targets]
+if {[llength $targets] > 0} {
+  current_hw_target [lindex $targets 0]
+  open_hw_target
+  set dev [current_hw_device]
+  puts "Device: $dev"
+  set_property PROGRAM.FILE {/home/zhihuiw/fpga_work/Prj/RiscV_WebSoC_3/build_xilinx/RiscV_WebSoC_fw.bit} $dev
+  program_hw_devices $dev
+  puts "PROGRAMMING SUCCESS"
+} else {
+  puts "ERROR: No hardware targets found."
+}
+close_hw_manager
