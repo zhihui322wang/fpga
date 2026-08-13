@@ -12,6 +12,9 @@ set_property PACKAGE_PIN D21 [get_ports reset_l]
 set_property PACKAGE_PIN L21 [get_ports uart_rx]
 set_property PACKAGE_PIN M21 [get_ports uart_tx]
 
+# 调试模式选择 (拨码开关 SW0: ON=调试/ILA, OFF=上传/CPU)
+set_property PACKAGE_PIN B21 [get_ports debug_sel]
+
 # LED
 set_property PACKAGE_PIN U22 [get_ports {led_o[0]}]
 set_property PACKAGE_PIN V22 [get_ports {led_o[1]}]
@@ -26,6 +29,8 @@ set_property IOSTANDARD LVCMOS33 [get_ports clk_50m_in]
 set_property IOSTANDARD LVCMOS33 [get_ports reset_l]
 set_property IOSTANDARD LVCMOS33 [get_ports uart_rx]
 set_property IOSTANDARD LVCMOS33 [get_ports uart_tx]
+set_property IOSTANDARD LVCMOS33 [get_ports debug_sel]
+set_property PULLUP true [get_ports debug_sel]
 set_property IOSTANDARD LVCMOS33 [get_ports {led_o[0]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {led_o[1]}]
 set_property IOSTANDARD LVCMOS33 [get_ports {led_o[2]}]

@@ -26,7 +26,7 @@ ADDR_CTRL        = 0x0004   # 控制: bit0=arm_toggle
 ADDR_STATUS      = 0x0008   # 状态: bit0=armed, bit1=triggered, bit2=done
 
 # gmii_rx_dv = probe 0, bit_lo=0, width=1 → 在 word0 bit0
-# 150bit 总线 = 5 个 32-bit 字 (word 0-4)
+# 184bit 总线 = 6 个 32-bit 字 (word 0-5)
 
 def main():
     print("=" * 60)
@@ -53,8 +53,8 @@ def main():
     print("  TRIG_MODE = 1 (value match)")
     dev.reg_write(CORE, ADDR_TRIG_MODE, 0x00000001)
 
-    # 清空所有 TRIG_VALUE 和 TRIG_MASK word
-    for word_idx in range(5):
+    # 清空所有 TRIG_VALUE 和 TRIG_MASK word (184bit = 6 words)
+    for word_idx in range(6):
         dev.reg_write(CORE, ADDR_TRIG_VALUE + word_idx, 0x00000000)
         dev.reg_write(CORE, ADDR_TRIG_MASK  + word_idx, 0x00000000)
 

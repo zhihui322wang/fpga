@@ -17,7 +17,7 @@ module tb_sram_debug;
       .rgmii_txc(rgmii_txc), .rgmii_txd(rgmii_txd), .rgmii_tx_ctl(rgmii_tx_ctl),
       .rgmii_rxc(rgmii_rxc), .rgmii_rxd(rgmii_rxd), .rgmii_rx_ctl(rgmii_rx_ctl),
       .Eth0_MDC(Eth0_MDC), .Eth0_MDIO(Eth0_MDIO), .rgmii_reset_l(rgmii_reset_l),
-      .uart_rx(uart_rx), .uart_tx(uart_tx), .led_o(led_o)
+      .uart_rx(uart_rx), .uart_tx(uart_tx), .debug_sel(1'b1), .led_o(led_o)
   );
 
   initial clk_50m_in = 1'b0;

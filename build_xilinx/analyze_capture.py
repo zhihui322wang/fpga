@@ -26,6 +26,8 @@ P = dict(
     cpu_rd_empty=(140,1), cpu_wr_full=(141,1), cpu_rd_rpkt_pop_ind=(142,1),
     cpu_wr_wpkt_push_ind=(143,1), cpu_wr_wen_ind=(144,1), cpu_rd_ren=(145,1),
     led_o=(146,4),
+    rx_afifo_full_cnt=(150,8), rx_correct_pkt_cnt=(158,8), rx_crc_err_pkt_cnt=(166,8),
+    recv_pkt_drop_cnt=(174,8), mac_in_full=(182,1), gmii_rx_er=(183,1),
 )
 
 def main():
@@ -38,7 +40,7 @@ def main():
 
     # 触发: gmii_rx_dv = 1 (bit 0)
     dev.reg_write(CORE, ADDR_TRIG_MODE, 1)
-    for i in range(5):
+    for i in range(6):   # 184bit = 6 个 32-bit 字 (word 0-5)
         dev.reg_write(CORE, ADDR_TRIG_VALUE + i, 0)
         dev.reg_write(CORE, ADDR_TRIG_MASK + i, 0)
     dev.reg_write(CORE, ADDR_TRIG_VALUE + 0, 1)
@@ -110,6 +112,19 @@ def main():
 
     print("\n=== TX 活动 (应非零才说明 CPU 在回 ARP) ===")
     print(f"gmii_tx_en: {cnt(tx_en)}  mac_tx_en: {cnt(mac_tx_en)}  led_o: {sorted(set(led))}")
+
+    # 新增 6 探针 — 丢包根因判定
+    rx_afifo_full = sig("rx_afifo_full_cnt"); rx_correct = sig("rx_correct_pkt_cnt")
+    rx_crc_err = sig("rx_crc_err_pkt_cnt"); recv_drop = sig("recv_pkt_drop_cnt")
+    mac_in_full = sig("mac_in_full"); gmii_rx_er = sig("gmii_rx_er")
+
+    print("\n=== 丢包根因判定 (新增 6 探针) ===")
+    print(f"rx_correct_pkt_cnt = {max(rx_correct):3d}  (>0=物理层正常, 好FCS帧计数)")
+    print(f"rx_crc_err_pkt_cnt = {max(rx_crc_err):3d}  (>0=物理层损坏: IDELAY/位序/时钟)")
+    print(f"rx_afifo_full_cnt = {max(rx_afifo_full):3d}  (>0=内部异步FIFO Eth_RXC→125m 溢出丢字节)")
+    print(f"recv_pkt_drop_cnt = {max(recv_drop):3d}  (>0=125m→50m FIFO 满丢整包)")
+    print(f"mac_in_full       = {max(mac_in_full)}      (1=full 卡高, CDC 指针问题)")
+    print(f"gmii_rx_er 活动   = {cnt(gmii_rx_er)} 样本 (PHY 错误标志)")
 
     # cpu_rd_empty 时序: 找下降沿(有数据到来)
     rd_fall = [i for i in range(1, len(cpu_rd_empty)) if not cpu_rd_empty[i] and cpu_rd_empty[i-1]]

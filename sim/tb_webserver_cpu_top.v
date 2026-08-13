@@ -47,6 +47,7 @@ module tb_webserver_cpu_top;
       .rgmii_reset_l (rgmii_reset_l),
       .uart_rx       (uart_rx),
       .uart_tx       (uart_tx),
+      .debug_sel     (1'b1),   // 仿真: 上传模式(CPU 独享)
       .led_o         (led_o)
   );
 

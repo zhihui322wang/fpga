@@ -31,6 +31,9 @@ module webserver_cpu_top #(
     input  wire       uart_rx,
     output wire       uart_tx,
 
+    // 调试模式选择 (拨码开关 SW0): 上传固件 / ILA 抓波形 二选一
+    input  wire       debug_sel,
+
     // LED
     output wire [3:0] led_o
 );
@@ -116,6 +119,19 @@ module webserver_cpu_top #(
   wire [7:0]  mac_tx_data;
 
   //============================================================================
+  // MAC/CDC 调试计数器 — 丢包根因定位用 (gmii2mac 统计输出 + cpu_channel 调试)
+  //============================================================================
+  wire [31:0] rx_afifo_full_cnt;    // gmii2mac 内部异步 FIFO (Eth_RXC→125m) 满计数
+  wire [31:0] rx_afifo_empty_cnt;
+  wire [31:0] rx_data_err_line;
+  wire [31:0] rx_correct_pkt_cnt;   // 好 FCS 帧计数 (物理层正常则 >0)
+  wire [31:0] rx_crc_err_pkt_cnt;   // 坏 FCS 帧计数 (物理层损坏则 >0)
+  wire [31:0] tx_correct_pkt_cnt;
+  wire [31:0] tx_error_pkt_cnt;
+  wire [7:0]  recv_pkt_drop_cnt;    // cpu_channel 125m→50m FIFO 满丢包计数
+  wire        mac_in_full;          // package_fifo_v2 RX full 标志 (卡高=CDC 问题)
+
+  //============================================================================
   // cpu_channel ↔ lcpu_fpga_test 信号 (CPU FIFO)
   //============================================================================
   wire        cpu_rd_empty;
@@ -192,6 +208,17 @@ module webserver_cpu_top #(
   wire                         ila_jtag_clk;
   wire                         cpu_uart_tx;   // CPU UART TX (ILA 占用板载 UART)
 
+  //--------------------------------------------------------------------------
+  // UART RX 互斥复用 — 固件上传(115200) 与 ILA 抓波形(921600) 共用板载串口 L21,
+  //   用拨码开关 SW0 手工切换, 二者永不冲突:
+  //     debug_sel=0 (SW0 拨到 ON,  接地) → 调试模式: uart_rx 给 ILA,  CPU RX 置空闲
+  //     debug_sel=1 (SW0 拨回 OFF, 上拉) → 上传模式: uart_rx 给 CPU, ILA RX 置空闲
+  //   物理开关是持续状态, GUI 打开串口触发的 DTR 复位 / 按键复位都无法改变它,
+  //   从根上杜绝了启发式门控被复位重新打开的问题。
+  //--------------------------------------------------------------------------
+  wire ila_uart_rx = ~debug_sel ? uart_rx : 1'b1;   // ILA 侧 RX (调试时独享)
+  wire cpu_uart_rx =  debug_sel ? uart_rx : 1'b1;   // CPU 侧 RX (上传时独享)
+
   //============================================================================
   // 1. fpga_build_time — 版本时间戳
   //============================================================================
@@ -245,13 +272,13 @@ module webserver_cpu_top #(
       .mac_tx_data(mac_tx_data),
       .mac_tx_eop (mac_tx_eop),
       .mac_tx_err (mac_tx_err),
-      .rx_afifo_full_cnt (),
-      .rx_afifo_empty_cnt(),
-      .rx_data_err_line  (),
-      .rx_correct_pkt_cnt(),
-      .rx_crc_err_pkt_cnt(),
-      .tx_correct_pkt_cnt(),
-      .tx_error_pkt_cnt  ()
+      .rx_afifo_full_cnt (rx_afifo_full_cnt),
+      .rx_afifo_empty_cnt(rx_afifo_empty_cnt),
+      .rx_data_err_line  (rx_data_err_line),
+      .rx_correct_pkt_cnt(rx_correct_pkt_cnt),
+      .rx_crc_err_pkt_cnt(rx_crc_err_pkt_cnt),
+      .tx_correct_pkt_cnt(tx_correct_pkt_cnt),
+      .tx_error_pkt_cnt  (tx_error_pkt_cnt)
   );
 
   //============================================================================
@@ -296,7 +323,8 @@ module webserver_cpu_top #(
       .cpu_wr_wpkt_len (cpu_wr_wpkt_len),
       .cpu_wr_wpkt_para(),
       // 调试
-      .recv_pkt_drop_cnt(),
+      .recv_pkt_drop_cnt(recv_pkt_drop_cnt),
+      .mac_in_full      (mac_in_full),
       .dbg_fifo_wdata  (),
       .dbg_fifo_wen    (),
       .dbg_fifo_push   ()
@@ -322,7 +350,7 @@ module webserver_cpu_top #(
   ) u_riscv (
       .clk            (clk_50m),
       .reset_l        (reset_l),
-      .uart_rx        (uart_rx),
+      .uart_rx        (cpu_uart_rx),   // 复用后: 上传模式(debug_sel=1)独享
       .uart_tx        (cpu_uart_tx),    // CPU UART TX (ILA 占用板载 uart_tx)
       .riscv_reset_l  (riscv_reset_l),
       // 指令 RAM 接口
@@ -385,7 +413,7 @@ module webserver_cpu_top #(
   );
 
   //============================================================================
-  // 7. fpga_ila 核 #0 — 26 探针, 150bit 总线观测
+  // 7. fpga_ila 核 #0 — 32 探针, 184bit 总线观测
   //    sample_clk = clk_50m (20ns 粒度, 时序可靠)
   //============================================================================
   soft_ila_top #(
@@ -394,7 +422,7 @@ module webserver_cpu_top #(
       .MAX_WINDOWS   (1),
       .SAMPLE_HZ     (50_000_000),
       .RST_ACTIVE_LOW(1),
-      .NUM_PROBES    (26),
+      .NUM_PROBES    (32),
       .PROBE0_WIDTH  (1),    // gmii_rx_dv
       .PROBE1_WIDTH  (8),    // gmii_rxd
       .PROBE2_WIDTH  (1),    // gmii_tx_en
@@ -420,7 +448,13 @@ module webserver_cpu_top #(
       .PROBE22_WIDTH (1),    // cpu_wr_wpkt_push_ind
       .PROBE23_WIDTH (1),    // cpu_wr_wen_ind
       .PROBE24_WIDTH (1),    // cpu_rd_ren
-      .PROBE25_WIDTH (4)     // led_o (led_val)
+      .PROBE25_WIDTH (4),    // led_o (led_val)
+      .PROBE26_WIDTH (8),    // rx_afifo_full_cnt[7:0]
+      .PROBE27_WIDTH (8),    // rx_correct_pkt_cnt[7:0]
+      .PROBE28_WIDTH (8),    // rx_crc_err_pkt_cnt[7:0]
+      .PROBE29_WIDTH (8),    // recv_pkt_drop_cnt[7:0]
+      .PROBE30_WIDTH (1),    // mac_in_full
+      .PROBE31_WIDTH (1)     // gmii_rx_er
   ) u_ila_core0 (
       .sample_clk   (clk_50m),
       .rst_in       (sys_rst_n),
@@ -451,6 +485,12 @@ module webserver_cpu_top #(
       .probe23      (cpu_wr_wen_ind),
       .probe24      (cpu_rd_ren),
       .probe25      (led_val),
+      .probe26      (rx_afifo_full_cnt[7:0]),
+      .probe27      (rx_correct_pkt_cnt[7:0]),
+      .probe28      (rx_crc_err_pkt_cnt[7:0]),
+      .probe29      (recv_pkt_drop_cnt),
+      .probe30      (mac_in_full),
+      .probe31      (gmii_rx_er),
       .trigger_in   (1'b0),
       .trigger_out  (),
       .armed_out    (),
@@ -473,7 +513,7 @@ module webserver_cpu_top #(
       .clk           (clk_50m),
       .rst           (~sys_rst_n),
       // UART (板载串口)
-      .uart_rxd      (uart_rx),
+      .uart_rxd      (ila_uart_rx),    // 调试模式(debug_sel=0)独享
       .uart_txd      (uart_tx),
       // ETH — 不用
       .gmii_rx_clk   (1'b0),

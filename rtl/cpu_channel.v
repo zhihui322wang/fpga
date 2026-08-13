@@ -43,6 +43,7 @@ module cpu_channel #(
     output                  mac_tx_err,
 
     output reg [7:0] recv_pkt_drop_cnt,
+    output      mac_in_full,   // ILA: package_fifo_v2 RX full 标志 (125m 域)
     output [cpu_buf_data_width-1:0] dbg_fifo_wdata,  // ILA: FIFO写数据
     output      dbg_fifo_wen,   // ILA: FIFO写使能
     output      dbg_fifo_push,  // ILA: FIFO推包脉冲
@@ -96,7 +97,6 @@ module cpu_channel #(
   //============================================================================
   // 2. ram2pktfifo_int: 流式写入 → 包 FIFO 接口
   //============================================================================
-  wire                  mac_in_full;
   wire                  mac_in_wen;
   wire [cpu_buf_addr_width-1:0] mac_in_waddr;
   wire [cpu_buf_data_width-1:0] mac_in_wdata;

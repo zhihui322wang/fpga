@@ -8,7 +8,7 @@
       "sample_clock_hz": 50000000,
       "data_depth": 2048,
       "max_windows": 1,
-      "signature": "0x000008001A010096",
+      "signature": "0x00000800200100B8",
       "probes": [
         {"name": "gmii_rx_dv",           "width": 1,  "radix": "bin", "bit_lo": 0},
         {"name": "gmii_rxd",             "width": 8,  "radix": "hex", "bit_lo": 1},
@@ -35,7 +35,13 @@
         {"name": "cpu_wr_wpkt_push_ind", "width": 1,  "radix": "bin", "bit_lo": 143},
         {"name": "cpu_wr_wen_ind",       "width": 1,  "radix": "bin", "bit_lo": 144},
         {"name": "cpu_rd_ren",           "width": 1,  "radix": "bin", "bit_lo": 145},
-        {"name": "led_o",                "width": 4,  "radix": "hex", "bit_lo": 146}
+        {"name": "led_o",                "width": 4,  "radix": "hex", "bit_lo": 146},
+        {"name": "rx_afifo_full_cnt",    "width": 8,  "radix": "hex", "bit_lo": 150},
+        {"name": "rx_correct_pkt_cnt",   "width": 8,  "radix": "hex", "bit_lo": 158},
+        {"name": "rx_crc_err_pkt_cnt",   "width": 8,  "radix": "hex", "bit_lo": 166},
+        {"name": "recv_pkt_drop_cnt",    "width": 8,  "radix": "hex", "bit_lo": 174},
+        {"name": "mac_in_full",          "width": 1,  "radix": "bin", "bit_lo": 182},
+        {"name": "gmii_rx_er",           "width": 1,  "radix": "bin", "bit_lo": 183}
       ]
     }
   ]
