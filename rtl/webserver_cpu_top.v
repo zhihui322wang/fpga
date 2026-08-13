@@ -206,18 +206,20 @@ module webserver_cpu_top #(
   wire [31:0]                  ila_wdata;
   wire [ILA_NUM_CORES*32-1:0]  ila_rdata;
   wire                         ila_jtag_clk;
-  wire                         cpu_uart_tx;   // CPU UART TX (ILA 占用板载 UART)
+  wire                         cpu_uart_tx;   // CPU UART TX 输出 (上传模式回显读命令)
+  wire                         ila_uart_tx;   // ILA UART TX 输出 (调试模式发波形)
 
   //--------------------------------------------------------------------------
-  // UART RX 互斥复用 — 固件上传(115200) 与 ILA 抓波形(921600) 共用板载串口 L21,
+  // UART RX/TX 互斥复用 — 固件上传(115200) 与 ILA 抓波形(921600) 共用板载串口 L21/M21,
   //   用拨码开关 SW0 手工切换, 二者永不冲突:
-  //     debug_sel=0 (SW0 拨到 ON,  接地) → 调试模式: uart_rx 给 ILA,  CPU RX 置空闲
-  //     debug_sel=1 (SW0 拨回 OFF, 上拉) → 上传模式: uart_rx 给 CPU, ILA RX 置空闲
+  //     debug_sel=0 (SW0 拨到 ON,  接地) → 调试模式: uart_rx/tx 给 ILA,  CPU 侧置空闲
+  //     debug_sel=1 (SW0 拨回 OFF, 上拉) → 上传模式: uart_rx/tx 给 CPU, ILA 侧置空闲
   //   物理开关是持续状态, GUI 打开串口触发的 DTR 复位 / 按键复位都无法改变它,
   //   从根上杜绝了启发式门控被复位重新打开的问题。
   //--------------------------------------------------------------------------
   wire ila_uart_rx = ~debug_sel ? uart_rx : 1'b1;   // ILA 侧 RX (调试时独享)
   wire cpu_uart_rx =  debug_sel ? uart_rx : 1'b1;   // CPU 侧 RX (上传时独享)
+  assign uart_tx = debug_sel ? cpu_uart_tx : ila_uart_tx;  // TX 方向同样按模式复用
 
   //============================================================================
   // 1. fpga_build_time — 版本时间戳
@@ -514,7 +516,7 @@ module webserver_cpu_top #(
       .rst           (~sys_rst_n),
       // UART (板载串口)
       .uart_rxd      (ila_uart_rx),    // 调试模式(debug_sel=0)独享
-      .uart_txd      (uart_tx),
+      .uart_txd      (ila_uart_tx),    // 调试模式(debug_sel=0)独享 (顶层 uart_tx 由 mux 驱动)
       // ETH — 不用
       .gmii_rx_clk   (1'b0),
       .gmii_rxd      (8'b0),

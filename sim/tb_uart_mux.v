@@ -101,9 +101,26 @@ module tb_uart_mux;
     debug_sel = 1'b1;
     uart_rx = 1'b0;  check(1'b1, 1'b0, "sel=1 rx=0 (切回)");
 
+    // ---- TX 复用验证: force 两个源到不同值, 检查顶层 uart_tx 跟随 ----
+    $display("---- TX mux ----");
+    force u_dut.cpu_uart_tx = 1'b0;   // CPU 源 = 0
+    force u_dut.ila_uart_tx = 1'b1;   // ILA 源 = 1
+    debug_sel = 1'b1;                 // 上传模式 → uart_tx 应 = cpu_uart_tx = 0
+    #5;
+    if (uart_tx === 1'b0) $display("PASS TX: sel=1 uart_tx=0 (跟随 CPU)");
+    else begin $display("FAIL TX: sel=1 uart_tx=%b (期望 0)", uart_tx); errs = errs + 1; end
+
+    debug_sel = 1'b0;                 // 调试模式 → uart_tx 应 = ila_uart_tx = 1
+    #5;
+    if (uart_tx === 1'b1) $display("PASS TX: sel=0 uart_tx=1 (跟随 ILA)");
+    else begin $display("FAIL TX: sel=0 uart_tx=%b (期望 1)", uart_tx); errs = errs + 1; end
+
+    release u_dut.cpu_uart_tx;
+    release u_dut.ila_uart_tx;
+
     $display("============================================");
     if (errs == 0)
-      $display(" 全部 mux 检查通过 (5/5)");
+      $display(" 全部 mux 检查通过 (7/7: 5 RX + 2 TX)");
     else
       $display(" %0d 项检查失败", errs);
     $display("============================================");

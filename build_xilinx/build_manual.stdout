@@ -1,0 +1,78 @@
+
+****** Vivado v2024.1 (64-bit)
+  **** SW Build 5076996 on Wed May 22 18:36:09 MDT 2024
+  **** IP Build 5075265 on Wed May 22 21:45:21 MDT 2024
+  **** SharedData Build 5076995 on Wed May 22 18:29:18 MDT 2024
+  **** Start of session at: Thu Aug 13 19:47:28 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source build.tcl
+# set script_dir [file dirname [file normalize [info script]]]
+# set proj_name "RiscV_WebSoC"
+# set proj_dir  $script_dir
+# set rtl_dir   [file normalize [file join $script_dir ../rtl]]
+# set fpga_ila_home "/home/zhihuiw/fpga_work/ip_copy"
+# set fpga_ila_rtl  [file join $fpga_ila_home rtl]
+# create_project -force $proj_name $proj_dir -part xc7a35tfgg484-2
+create_project: Time (s): cpu = 00:00:07 ; elapsed = 00:00:06 . Memory (MB): peak = 1361.566 ; gain = 71.348 ; free physical = 6363 ; free virtual = 9884
+# puts "\[OK\] Project created"
+[OK] Project created
+# foreach f [lsort [glob -nocomplain ${rtl_dir}/*.v ${rtl_dir}/*.sv]] {
+#     add_files -norecurse $f
+# }
+# puts "\[OK\] Added [llength [glob -nocomplain ${rtl_dir}/*.v ${rtl_dir}/*.sv]] project RTL files"
+[OK] Added 45 project RTL files
+# if {[file exists $fpga_ila_rtl]} {
+#     foreach f [lsort [glob -nocomplain ${fpga_ila_rtl}/*.v]] {
+#         add_files -norecurse $f
+#     }
+#     # .vh 头文件 (Vivado 依赖追踪)
+#     foreach f [lsort [glob -nocomplain ${fpga_ila_rtl}/*.vh]] {
+#         add_files -norecurse $f
+#     }
+#     puts "\[OK\] Added fpga_ila RTL files from $fpga_ila_rtl"
+# } else {
+#     puts "\[ERROR\] fpga_ila not found: $fpga_ila_rtl"
+#     exit 1
+# }
+CRITICAL WARNING: [Vivado 12-3645] Please note that adding or importing multiple files, one at a time, can be performance intensive.  Both add_files and import_files commands accept multiple files as input, and passing a collection of multiple files to a single add_files or import_files commands can offer significant performance improvement.
+[OK] Added fpga_ila RTL files from /home/zhihuiw/fpga_work/ip_copy/rtl
+# set_property FILE_TYPE SYSTEMVERILOG [get_files -filter {FILE_TYPE == Verilog}]
+# set_property top webserver_cpu_top [current_fileset]
+# set_property include_dirs [list $rtl_dir $fpga_ila_rtl] [current_fileset]
+# update_compile_order -fileset sources_1
+# add_files -fileset constrs_1 -norecurse [file join $script_dir pins.xdc]
+# add_files -fileset constrs_1 -norecurse [file join $script_dir timing.xdc]
+# puts "Running Synthesis..."
+Running Synthesis...
+# launch_runs synth_1 -jobs 8
+WARNING: [Vivado 12-7122] Auto Incremental Compile:: No reference checkpoint was found in run synth_1. Auto-incremental flow will not be run, the standard flow will be run instead.
+[Thu Aug 13 19:47:40 2026] Launched synth_1...
+Run output will be captured here: /home/zhihuiw/fpga_work/Prj/RiscV_WebSoC_3/build_xilinx/RiscV_WebSoC.runs/synth_1/runme.log
+# wait_on_run synth_1
+[Thu Aug 13 19:47:40 2026] Waiting for synth_1 to finish...
+
+*** Running vivado
+    with args -log webserver_cpu_top.vds -m64 -product Vivado -mode batch -messageDb vivado.pb -notrace -source webserver_cpu_top.tcl
+
+
+****** Vivado v2024.1 (64-bit)
+  **** SW Build 5076996 on Wed May 22 18:36:09 MDT 2024
+  **** IP Build 5075265 on Wed May 22 21:45:21 MDT 2024
+  **** SharedData Build 5076995 on Wed May 22 18:29:18 MDT 2024
+  **** Start of session at: Thu Aug 13 19:47:42 2026
+    ** Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+    ** Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
+
+source webserver_cpu_top.tcl -notrace
+create_project: Time (s): cpu = 00:00:07 ; elapsed = 00:00:06 . Memory (MB): peak = 1361.836 ; gain = 72.316 ; free physical = 5908 ; free virtual = 9430
+Command: synth_design -top webserver_cpu_top -part xc7a35tfgg484-2
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7a35t'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7a35t'
+INFO: [Device 21-403] Loading part xc7a35tfgg484-2
+INFO: [Device 21-9227] Part: xc7a35tfgg484-2 does not have CEAM library.
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 4 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 325857
