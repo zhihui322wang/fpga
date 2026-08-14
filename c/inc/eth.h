@@ -4,5 +4,6 @@
 #define _ETH_H_
 
 uint16 eth_proc();
+void   eth_write_tx_header(void);
 
 #endif // _ETH_H_

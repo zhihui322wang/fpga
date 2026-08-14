@@ -2,6 +2,37 @@
 
 #include "inc/lcpu_general.h"
 
+// 预写完整的 14 字节以太网头到 TX FIFO (字节 0-13)
+// 每个 PUSH 的包进独立 block, 故每发一个包都必须重写一次 eth 头
+void eth_write_tx_header(void)
+{
+    uint32 fifo_data = 0;
+    uint32 i;
+
+    // 源 MAC (本机 MAC) → 字节 6-11
+    LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 0, (Local_MAC_HIGH >> 24) & 0xFF);
+    LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 1, (Local_MAC_HIGH >> 16) & 0xFF);
+    LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 2, (Local_MAC_HIGH >> 8) & 0xFF);
+    LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 3, (Local_MAC_HIGH >> 0) & 0xFF);
+    LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 4, (Local_MAC_LOW >> 8) & 0xFF);
+    LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 5, (Local_MAC_LOW >> 0) & 0xFF);
+
+    // 目的 MAC = 接收包源 MAC → 字节 0-5
+    for (i = 0; i < 6; i++) {
+        LCPU_RD_SET_ADDR(OFF_ETH_SRC_MAC + i);
+        fifo_data = LCPU_RD_DATA8();
+        LCPU_WR_BYTE(OFF_ETH_DST_MAC + i, fifo_data);
+    }
+
+    // EtherType → 字节 12-13
+    LCPU_RD_SET_ADDR(OFF_ETH_TYPE);
+    fifo_data = LCPU_RD_DATA8();
+    LCPU_WR_BYTE(OFF_ETH_TYPE, fifo_data);
+    LCPU_RD_SET_ADDR(OFF_ETH_TYPE + 1);
+    fifo_data = LCPU_RD_DATA8();
+    LCPU_WR_BYTE(OFF_ETH_TYPE + 1, fifo_data);
+}
+
 uint16 eth_proc()
 {
     uint32 fifo_data = 0;
@@ -42,25 +73,8 @@ uint16 eth_proc()
             return NO_PROC;
         }
 
-        // 预写源 MAC (本机 MAC) 到 TX FIFO 字节 6-11
-        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 0, (Local_MAC_HIGH >> 24) & 0xFF);
-        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 1, (Local_MAC_HIGH >> 16) & 0xFF);
-        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 2, (Local_MAC_HIGH >> 8) & 0xFF);
-        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 3, (Local_MAC_HIGH >> 0) & 0xFF);
-        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 4, (Local_MAC_LOW >> 8) & 0xFF);
-        LCPU_WR_BYTE(OFF_ETH_SRC_MAC + 5, (Local_MAC_LOW >> 0) & 0xFF);
-
-        // 交换 MAC: 拷贝接收的源 MAC → TX 目的 MAC (字节 0-5)
-        uint32 i;
-        for (i = 0; i < 6; i++) {
-            LCPU_RD_SET_ADDR(OFF_ETH_SRC_MAC + i);
-            fifo_data = LCPU_RD_DATA8();
-            LCPU_WR_BYTE(OFF_ETH_DST_MAC + i, fifo_data);
-        }
-
-        // 拷贝 EtherType
-        LCPU_WR_BYTE(OFF_ETH_TYPE,     (eth_type >> 8) & 0xFF);
-        LCPU_WR_BYTE(OFF_ETH_TYPE + 1, (eth_type >> 0) & 0xFF);
+        // 预写以太网头 (后续 tcp_send_* 继续写 IP+TCP 头)
+        eth_write_tx_header();
 
         return IP_PROC;
     }

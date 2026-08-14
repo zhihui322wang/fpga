@@ -7,6 +7,7 @@
 #include "inc/ip.h"
 #include "inc/icmp.h"
 #include "inc/tcp.h"
+#include "inc/http.h"
 
 __attribute__((naked, used, section(".text.bootloader")))
 void reset_entry() {
@@ -64,8 +65,7 @@ void program_main() {
         LCPU_RD_START_PACKET();
         uint32 len = LCPU_RD_PKT_LEN();
         if (len == 0 || len > 2048) {
-            LCPU_RD_START_PACKET();
-            continue;
+            continue;  // 坏包: START_PACKET 已弹过, 不再重复 pop
         }
 
         /* 4. 协议栈网络分发 */
@@ -82,12 +82,11 @@ void program_main() {
                 uint16 app_type = tcp_proc();
                 
                 if (app_type == HTTP_PROC) {
-                    // 任务 11: 收到 HTTP 数据，后续对接 http_proc() 模块
-                    // http_proc();
+                    // 任务 11: 收到 HTTP 数据，交给 http_proc 处理
+                    http_proc(tcp_active_slot);
                 }
             }
         }
 
-        _RD(1) = 1; // 释放数据包内存
     }
 }

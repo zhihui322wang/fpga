@@ -1,5 +1,6 @@
 #include "inc/lcpu_general.h"
 #include "inc/comlib.h"
+#include "inc/eth.h"
 #include "inc/ip.h"
 #include "inc/tcp.h"
 
@@ -15,6 +16,7 @@ uint16 tcp_window   = 0;
 uint16 tcp_data_len = 0;
 
 tcp_conn_t conn_table[MAX_TCP_CONN];
+int tcp_active_slot = -1;
 
 /* ============================================================================
  * 2. 硬件 FIFO 读写辅助函数
@@ -136,15 +138,26 @@ int tcp_parse_header(void) {
  * 5. TCP 伪首部与校验和计算 (Task 8a)
  * 基于寄存器运算，避免读 TX FIFO
  * ============================================================================ */
-uint16 tcp_calc_checksum(uint32 src_i, uint32 dst_i, uint16 src_p, 
-                         uint16 dst_p, uint32 seq, uint32 ack, 
+uint16 tcp_calc_checksum(uint32 src_i, uint32 dst_i, uint16 src_p,
+                         uint16 dst_p, uint32 seq, uint32 ack,
                          uint8 flags, uint16 win, uint16 payload_len) {
+    return tcp_calc_checksum_payload(src_i, dst_i, src_p, dst_p, seq, ack,
+                                     flags, win, 0, payload_len);
+}
+
+uint16 tcp_calc_checksum_payload(uint32 src_i, uint32 dst_i, uint16 src_p,
+                                 uint16 dst_p, uint32 seq, uint32 ack,
+                                 uint8 flags, uint16 win,
+                                 const uint8 *data, uint16 len) {
     uint32 sum = 0;
-    uint16 tcp_tot_len = 20 + payload_len;
+    uint16 tcp_tot_len = 20 + len;
+    uint16 i;
 
     // 1. 伪首部 (12 字节)
-    sum = cks_sum_cal((src_i >> 16) & 0xFFFF, src_i & 0xFFFF, sum);
-    sum = cks_sum_cal((dst_i >> 16) & 0xFFFF, dst_i & 0xFFFF, sum);
+    sum = cks_sum_cal((src_i >> 24) & 0xFF, (src_i >> 16) & 0xFF, sum);
+    sum = cks_sum_cal((src_i >> 8)  & 0xFF,  src_i        & 0xFF, sum);
+    sum = cks_sum_cal((dst_i >> 24) & 0xFF, (dst_i >> 16) & 0xFF, sum);
+    sum = cks_sum_cal((dst_i >> 8)  & 0xFF,  dst_i        & 0xFF, sum);
     sum = cks_sum_cal(0x00, IP_PROTOCOL_TCP, sum);
     sum = cks_sum_cal((tcp_tot_len >> 8) & 0xFF, tcp_tot_len & 0xFF, sum);
 
@@ -158,6 +171,16 @@ uint16 tcp_calc_checksum(uint32 src_i, uint32 dst_i, uint16 src_p,
     sum = cks_sum_cal(0x50, flags, sum); // DataOffset 5 = 20B
     sum = cks_sum_cal((win >> 8) & 0xFF, win & 0xFF, sum);
     sum = cks_sum_cal(0, 0, sum);        // Checksum & Urgent Ptr 填 0
+
+    // 3. Payload (若提供)
+    if (data) {
+        for (i = 0; i + 1 < len; i += 2) {
+            sum = cks_sum_cal(data[i], data[i + 1], sum);
+        }
+        if (len & 1) {
+            sum = cks_sum_cal(data[len - 1], 0, sum);
+        }
+    }
 
     return (uint16)(~sum);
 }
@@ -285,10 +308,93 @@ void tcp_send_rst(uint32 dst_ip, uint16 dst_p, uint16 src_p, uint32 seq) {
 }
 
 /* ============================================================================
+ * 6b. 带 Payload 发送 (HTTP 响应) 与主动关闭 (Active Close)
+ * ============================================================================ */
+int tcp_send_data(int slot, const uint8 *data, uint16 len, uint8 flags) {
+    uint16 ip_tot = ip_header_len + tcp_header_len + len;
+    // +4 = FCS 长度 (对齐参考工程 RiscV_webSoC2 的 send_tcp_segment_with_payload)
+    uint16 tx_len = eth_header_len + ip_tot + 4;
+    uint32 tcp_start = eth_header_len + ip_header_len;
+    uint32 i;
+
+    if (slot < 0 || slot >= MAX_TCP_CONN) return -1;
+    if (conn_table[slot].state != TCP_STATE_ESTABLISHED) return -1;
+
+    // 每个包进独立 block, 必须重写 eth 头 (第 2 个包, eth_proc 只写了第 1 个)
+    eth_write_tx_header();
+
+    if (tx_len < 64) tx_len = 64;
+
+    ip_header_update(conn_table[slot].remote_ip, ip_tot);
+
+    uint16 csum = tcp_calc_checksum_payload(
+        Local_IP_ADDR, conn_table[slot].remote_ip, HTTP_PORT,
+        conn_table[slot].remote_port, conn_table[slot].local_seq,
+        conn_table[slot].remote_seq + tcp_data_len,
+        flags, 1460, data, len
+    );
+
+    tcp_wr16(tcp_start + 0,  HTTP_PORT);
+    tcp_wr16(tcp_start + 2,  conn_table[slot].remote_port);
+    tcp_wr32(tcp_start + 4,  conn_table[slot].local_seq);
+    tcp_wr32(tcp_start + 8,  conn_table[slot].remote_seq + tcp_data_len);
+    LCPU_WR_BYTE(tcp_start + 12, 0x50);
+    LCPU_WR_BYTE(tcp_start + 13, flags);
+    tcp_wr16(tcp_start + 14, 1460);
+    tcp_wr16(tcp_start + 16, csum);
+    tcp_wr16(tcp_start + 18, 0x0000);
+
+    for (i = 0; i < len; i++) LCPU_WR_BYTE(tcp_start + 20 + i, data[i]);
+    for (i = tcp_start + 20 + len; i < tx_len; i++) LCPU_WR_BYTE(i, 0);
+
+    LCPU_WR_PUSH_PACKET(tx_len);
+    _WR(6) = 1u;  // 强制 TX 刷新 (对齐参考工程)
+
+    conn_table[slot].local_seq += len;
+    if (flags & TCP_FLAG_FIN) conn_table[slot].local_seq++;  // FIN 额外占用一个序号
+    return 0;
+}
+
+void tcp_send_fin(int slot) {
+    uint16 ip_tot = ip_header_len + tcp_header_len;
+    uint16 tx_len = eth_header_len + ip_tot;
+    uint32 tcp_start = eth_header_len + ip_header_len;
+    uint32 i;
+
+    // 每个包进独立 block, 必须重写 eth 头 (第 3 个包)
+    eth_write_tx_header();
+
+    if (tx_len < 64) tx_len = 64;
+
+    ip_header_update(conn_table[slot].remote_ip, ip_tot);
+
+    uint16 csum = tcp_calc_checksum(
+        Local_IP_ADDR, conn_table[slot].remote_ip, HTTP_PORT,
+        conn_table[slot].remote_port, conn_table[slot].local_seq,
+        conn_table[slot].remote_seq + tcp_data_len,
+        TCP_FLAG_FIN | TCP_FLAG_ACK, 1460, 0
+    );
+
+    tcp_wr16(tcp_start + 0,  HTTP_PORT);
+    tcp_wr16(tcp_start + 2,  conn_table[slot].remote_port);
+    tcp_wr32(tcp_start + 4,  conn_table[slot].local_seq);
+    tcp_wr32(tcp_start + 8,  conn_table[slot].remote_seq + tcp_data_len);
+    LCPU_WR_BYTE(tcp_start + 12, 0x50);
+    LCPU_WR_BYTE(tcp_start + 13, TCP_FLAG_FIN | TCP_FLAG_ACK);
+    tcp_wr16(tcp_start + 14, 1460);
+    tcp_wr16(tcp_start + 16, csum);
+    tcp_wr16(tcp_start + 18, 0x0000);
+
+    for (i = 54; i < tx_len; i++) LCPU_WR_BYTE(i, 0);
+    LCPU_WR_PUSH_PACKET(tx_len);
+}
+
+/* ============================================================================
  * 7. 状态机入口与分发 (Tasks 10, 11, 12, 13)
  * ============================================================================ */
 uint16 tcp_proc(void) {
     int slot = tcp_parse_header();
+    tcp_active_slot = slot;
 
     if (tcp_dst_port != HTTP_PORT) {
         return NO_PROC;
@@ -422,6 +528,11 @@ void tcp_timer_check(void) {
                     // 超时达到最大次数，强行断开并释放资源
                     tcp_free_slot(i);
                 }
+            }
+        }
+        else if (conn_table[i].state == TCP_STATE_TIME_WAIT) {
+            if (now > conn_table[i].timeout) {
+                tcp_free_slot(i);
             }
         }
     }

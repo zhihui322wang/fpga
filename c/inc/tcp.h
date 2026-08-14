@@ -58,6 +58,7 @@ extern uint16 tcp_window;
 extern uint16 tcp_data_len;
 
 extern tcp_conn_t conn_table[MAX_TCP_CONN];
+extern int tcp_active_slot;
 
 /* ============================================================================
  * 6. API 函数原型声明 (Tasks 7~13)
@@ -69,15 +70,21 @@ int    tcp_alloc_slot(void);
 void   tcp_free_slot(int slot);
 
 /* 校验和计算 (Task 8a) */
-uint16 tcp_calc_checksum(uint32 src_ip, uint32 dst_ip, uint16 src_port, 
-                         uint16 dst_port, uint32 seq, uint32 ack, 
+uint16 tcp_calc_checksum(uint32 src_ip, uint32 dst_ip, uint16 src_port,
+                         uint16 dst_port, uint32 seq, uint32 ack,
                          uint8 flags, uint16 window, uint16 payload_len);
+uint16 tcp_calc_checksum_payload(uint32 src_ip, uint32 dst_ip, uint16 src_port,
+                                 uint16 dst_port, uint32 seq, uint32 ack,
+                                 uint8 flags, uint16 window,
+                                 const uint8 *data, uint16 len);
 
 /* 报文构建与发送 (Tasks 7c, 9a, 11, 12, 13) */
 void   tcp_send_syn_ack(int slot);
 void   tcp_send_ack(int slot);
 void   tcp_send_fin_ack(int slot);
 void   tcp_send_rst(uint32 dst_ip, uint16 dst_p, uint16 src_p, uint32 seq);
+int    tcp_send_data(int slot, const uint8 *data, uint16 len, uint8 flags);
+void   tcp_send_fin(int slot);
 
 /* 状态机分发与处理 (Tasks 10, 11, 12) */
 uint16 tcp_proc(void);

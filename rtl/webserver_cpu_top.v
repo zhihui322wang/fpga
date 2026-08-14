@@ -59,7 +59,7 @@ module webserver_cpu_top #(
   //============================================================================
   // fpga_ila 调试系统参数 (UART, 921600 baud)
   //============================================================================
-  localparam ILA_NUM_CORES     = 1;
+  localparam ILA_NUM_CORES     = 2;   // 核0=50m CPU域, 核1=125m GMII/MAC域
   localparam [2:0] ILA_TRANSPORT_EN = 3'b001;   // UART only
   localparam ILA_BAUD          = 921600;
   localparam ILA_CLK_HZ        = 50_000_000;     // Hub clk = 50MHz
@@ -499,6 +499,59 @@ module webserver_cpu_top #(
       .reg_addr     (ila_addr),
       .reg_wdata    (ila_wdata),
       .reg_rdata    (ila_rdata[31:0])
+  );
+
+  //============================================================================
+  // 7b. fpga_ila 核 #1 — 13 探针, 41bit, sample_clk = clk_125m
+  //     只抓 SDR 上游信号 (rgmii_gmii_bridge 之前), 时钟域 = clk_125m。
+  //     不碰 rgmii_txd/rgmii_txc 等 DDR 引脚 (那是 clk_125m_tx 域, soft ILA 不采)。
+  //     jtag_clk 仍接 ila_jtag_clk (= hub 的 50m), 与 sample_clk 异步 (内部 CDC)。
+  //============================================================================
+  soft_ila_top #(
+      .CORE_EN       (1),
+      .DATA_DEPTH    (2048),
+      .MAX_WINDOWS   (1),
+      .SAMPLE_HZ     (125_000_000),
+      .RST_ACTIVE_LOW(1),
+      .NUM_PROBES    (13),
+      .PROBE0_WIDTH  (1),    // gmii_rx_dv
+      .PROBE1_WIDTH  (8),    // gmii_rxd
+      .PROBE2_WIDTH  (1),    // mac_rx_sop
+      .PROBE3_WIDTH  (1),    // mac_rx_en
+      .PROBE4_WIDTH  (8),    // mac_rx_data
+      .PROBE5_WIDTH  (1),    // mac_rx_eop
+      .PROBE6_WIDTH  (1),    // gmii_tx_en
+      .PROBE7_WIDTH  (8),    // gmii_txd
+      .PROBE8_WIDTH  (1),    // mac_tx_sop
+      .PROBE9_WIDTH  (1),    // mac_tx_en
+      .PROBE10_WIDTH (8),    // mac_tx_data
+      .PROBE11_WIDTH (1),    // mac_tx_eop
+      .PROBE12_WIDTH (1)     // mac_tx_err
+  ) u_ila_core1 (
+      .sample_clk   (clk_125m),
+      .rst_in       (sys_rst_n),
+      .jtag_clk     (ila_jtag_clk),
+      .probe0       (gmii_rx_dv),
+      .probe1       (gmii_rxd),
+      .probe2       (mac_rx_sop),
+      .probe3       (mac_rx_en),
+      .probe4       (mac_rx_data),
+      .probe5       (mac_rx_eop),
+      .probe6       (gmii_tx_en),
+      .probe7       (gmii_txd),
+      .probe8       (mac_tx_sop),
+      .probe9       (mac_tx_en),
+      .probe10      (mac_tx_data),
+      .probe11      (mac_tx_eop),
+      .probe12      (mac_tx_err),
+      .trigger_in   (1'b0),
+      .trigger_out  (),
+      .armed_out    (),
+      .reg_we       (ila_we[1]),
+      .reg_re       (ila_re[1]),
+      .reg_addr     (ila_addr),
+      .reg_wdata    (ila_wdata),
+      .reg_rdata    (ila_rdata[63:32])
   );
 
   //============================================================================
