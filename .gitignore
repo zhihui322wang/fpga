@@ -104,5 +104,3 @@ usage_statistics_webtalk.*
 *.mmi
 *.xci
 obj_dir/
-c/http.c
-c/inc/http.h
